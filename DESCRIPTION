@@ -1,7 +1,7 @@
 Package: hmmTMB
 Type: Package
 Title: Fit Hidden Markov Models using Template Model Builder
-Version: 1.0.0
+Version: 1.0.1
 Authors@R: c(
   person(given = "Theo",
          family = "Michelot",
@@ -25,8 +25,8 @@ Encoding: UTF-8
 RoxygenNote: 7.2.2
 VignetteBuilder: knitr
 NeedsCompilation: yes
-Packaged: 2023-01-09 21:42:47 UTC; theo
+Packaged: 2023-01-12 16:20:51 UTC; theo
 Author: Theo Michelot [aut, cre],
   Richard Glennie [aut, ctb]
 Repository: CRAN
-Date/Publication: 2023-01-11 19:20:02 UTC
+Date/Publication: 2023-01-13 09:10:02 UTC

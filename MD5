@@ -1,4 +1,4 @@
-8f31d25498a963fb1a0ec07e2bf8372e *DESCRIPTION
+add172f999a7764e06e9d0866210a895 *DESCRIPTION
 756ebe712b409f88ff1a10e0d3b60da3 *NAMESPACE
 9e053bdeb41963285945b287638acbeb *R/dist.R
 4b05a8ea348884ca15c997677a1593d4 *R/dist_def.R
@@ -12,16 +12,9 @@ e56201e211987539dac32a0c18907d85 *R/observation.R
 bf1e083785f2094f1c800cf206b65b12 *R/update.R
 e9c373563afcbcafae7e696aa56562d1 *R/utility.R
 04c8bb961cf4747c941da0f0c3431fb0 *README.md
-9981a15bfd65117f65400dbd78e3f38a *build/vignette.rds
-8a2df4aa9e25089d2cb69e2e49d641f1 *inst/doc/hmmTMB_dist_list.R
-9c659353380786233547c284af3184cb *inst/doc/hmmTMB_dist_list.Rmd
-b287fd1d50c3849d8ac362aeac7cbffb *inst/doc/hmmTMB_dist_list.pdf
-9ad57cd5f65d3c918f3013d3ea8c50ed *inst/doc/hmmTMB_example_stan.R
-bde5ce328bc7f0fedd40f73b14472836 *inst/doc/hmmTMB_example_stan.Rmd
-84aee5a3f5421b77956c1103c8fbfcf9 *inst/doc/hmmTMB_example_stan.pdf
-4aa136bb311b398dc44691158356f933 *inst/doc/hmmTMB_workflow.R
-ffc2e6522c9c7c9fb4f453d8a170eeb9 *inst/doc/hmmTMB_workflow.Rmd
-e7968ac7bafb499e5caca23e4b392e99 *inst/doc/hmmTMB_workflow.pdf
+cfad934966190e0a89a71609445fe920 *build/vignette.rds
+0932d7aea24d495fab76a12bc8bec819 *inst/doc/hmmTMB_list_of_online_resources.Rmd
+2f21a6fe9bccf7761aaea0138f63164d *inst/doc/hmmTMB_list_of_online_resources.pdf
 4ecbc9f6bdb3be8389d9aecbf77e0780 *man/Dist.Rd
 1a08e6ff5e98ba091e422df4733a8a1d *man/HMM.Rd
 214fce57af2d3b6e8865536a80956b6b *man/MarkovChain.Rd
@@ -63,7 +56,5 @@ de142bf176bc082da9fc2dcf8615a20a *tests/testthat/test_hmm_simple.R
 3d2230bb64e8d4c690ce487cadda80ed *tests/testthat/test_markovchain.R
 8e3b20f4300d75c7c2c0522b3b06ff3f *tests/testthat/test_misc.R
 e9451af36db03f84ac815114c8c3cf25 *tests/testthat/test_observation.R
-9c659353380786233547c284af3184cb *vignettes/hmmTMB_dist_list.Rmd
-bde5ce328bc7f0fedd40f73b14472836 *vignettes/hmmTMB_example_stan.Rmd
-ffc2e6522c9c7c9fb4f453d8a170eeb9 *vignettes/hmmTMB_workflow.Rmd
-0006a6483b1d9bd57116321f917e2431 *vignettes/refs.bib
+0932d7aea24d495fab76a12bc8bec819 *vignettes/hmmTMB_list_of_online_resources.Rmd
+80eadfc66e1d162c1997b21a1ceb9eeb *vignettes/refs.bib
