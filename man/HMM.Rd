@@ -4,11 +4,6 @@
 \alias{HMM}
 \title{R6 class for hidden Markov model}
 \description{
-R6 class for hidden Markov model
-
-R6 class for hidden Markov model
-}
-\details{
 Encapsulates the observation and hidden state models for a hidden
 Markov model.
 }
@@ -103,12 +98,12 @@ hmm$predict(what = "tpm", n_post = 1000)
 \item \href{#method-HMM-out_stan}{\code{HMM$out_stan()}}
 \item \href{#method-HMM-llk}{\code{HMM$llk()}}
 \item \href{#method-HMM-edf}{\code{HMM$edf()}}
+\item \href{#method-HMM-suggest_initial}{\code{HMM$suggest_initial()}}
 \item \href{#method-HMM-setup}{\code{HMM$setup()}}
 \item \href{#method-HMM-fit_stan}{\code{HMM$fit_stan()}}
 \item \href{#method-HMM-fit}{\code{HMM$fit()}}
 \item \href{#method-HMM-mle}{\code{HMM$mle()}}
 \item \href{#method-HMM-forward_backward}{\code{HMM$forward_backward()}}
-\item \href{#method-HMM-cond}{\code{HMM$cond()}}
 \item \href{#method-HMM-pseudores}{\code{HMM$pseudores()}}
 \item \href{#method-HMM-viterbi}{\code{HMM$viterbi()}}
 \item \href{#method-HMM-sample_states}{\code{HMM$sample_states()}}
@@ -229,7 +224,7 @@ Output of optimiser after model fitting
 \subsection{Method \code{tmb_obj()}}{
 Model object created by TMB. This is the output of 
 the TMB function \code{MakeADFun}, and it is a list including elements
-\itemize{
+\describe{
   \item{\code{fn}}{Objective function}
   \item{\code{gr}}{Gradient function of fn}
   \item{\code{par}}{Vector of initial parameters on working scale}
@@ -246,7 +241,7 @@ the TMB function \code{MakeADFun}, and it is a list including elements
 Model object created by TMB for the joint likelihood of
 the fixed and random effects. This is the output of the TMB function 
 \code{MakeADFun}, and it is a list including elements
-\itemize{
+\describe{
   \item{\code{fn}}{Objective function}
   \item{\code{gr}}{Gradient function of fn}
   \item{\code{par}}{Vector of initial parameters on working scale}
@@ -412,7 +407,7 @@ Model parameters
 }
 \subsection{Returns}{
 A list with elements:
-\itemize{
+\describe{
   \item{\code{obspar}}{Parameters of observation model}
   \item{\code{tpm}}{Transition probability matrix of hidden state model}
 }
@@ -511,6 +506,26 @@ terms implied by smoothing)
 }
 }
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-HMM-suggest_initial"></a>}}
+\if{latex}{\out{\hypertarget{method-HMM-suggest_initial}{}}}
+\subsection{Method \code{suggest_initial()}}{
+Suggest initial parameter values
+
+Uses K-means clustering to split the data into naive "states", and
+estimates observation parameters within each of these states. This is
+meant to help with selecting initial parameter values before model
+fitting, but users should still think about the values carefully,
+and try multiple set of initial parameter values to ensure
+convergence to the global maximum of the likelihood function.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{HMM$suggest_initial()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+List of initial parameters
+}
+}
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-HMM-setup"></a>}}
 \if{latex}{\out{\hypertarget{method-HMM-setup}{}}}
 \subsection{Method \code{setup()}}{
@@ -564,11 +579,17 @@ posterior estimate, although this can be changed using
 Model fitting
 
 The negative log-likelihood of the model is minimised using the
-function \code{optimx}. TMB uses the Laplace approximation to integrate 
+function \code{optimx()}. TMB uses the Laplace approximation to integrate 
 the random effects out of the likelihood.
 
-After the model has been fitted, the output of \code{optim} can be
-accessed using the method \code{out}.
+After the model has been fitted, the output of \code{optimx()} can be
+accessed using the method \code{out()}. The estimated parameters can
+be accessed using the methods \code{par()} (for the HMM parameters, 
+possibly dependent on covariates), \code{predict()} (for uncertainty
+quantification and prediction of the HMM parameters for new covariate 
+values), \code{coeff_fe()} (for estimated fixed effect coefficients on
+the linear predictor scale), and \code{coeff_re()} (for estimated random
+effect coefficients on the linear predictor scale).
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{HMM$fit(silent = FALSE, ...)}\if{html}{\out{</div>}}
 }
@@ -644,43 +665,21 @@ Log-forward and log-backward probabilities
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-HMM-cond"></a>}}
-\if{latex}{\out{\hypertarget{method-HMM-cond}{}}}
-\subsection{Method \code{cond()}}{
-Compute conditional cumulative distribution functions
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{HMM$cond(ngrid = 1000, silent = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{ngrid}}{how many cells on the grid that CDF is computed on}
-
-\item{\code{silent}}{if TRUE then no messages are printed}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-cdfs on grid for each variable
-}
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-HMM-pseudores"></a>}}
 \if{latex}{\out{\hypertarget{method-HMM-pseudores}{}}}
 \subsection{Method \code{pseudores()}}{
 Pseudo-residuals
 
 Compute pseudo-residuals for the fitted model. If the fitted model
-is the "true" model, the pseudo-residuals follow a standard normal distribution.
-Deviations from normality suggest lack of fit.
+is the "true" model, the pseudo-residuals follow a standard normal 
+distribution. Deviations from normality suggest lack of fit.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{HMM$pseudores()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
-Matrix of pseudo-residuals, with one row for each response variable
-and one column for each observation
+List (of length the number of variables), where each element is
+a vector of pseudo-residuals (of length the number of data points)
 }
 }
 \if{html}{\out{<hr>}}
@@ -816,7 +815,7 @@ are returned}
 }
 \subsection{Returns}{
 A list with elements:
-\itemize{
+\describe{
   \item{post}{If return_post = TRUE, this is a vector (for scalar 
   outputs of fn) or matrix (for vector outputs) with a column for 
   each simulation}
@@ -992,7 +991,7 @@ will sample from posterior for each simulation}
 }
 \subsection{Returns}{
 List with elements:
-\itemize{
+\describe{
   \item{obs_stat: }{Vector of values of goodness-of-fit statistics for the
   observed data}
   \item{stats: }{Matrix of values of goodness-of-fit statistics for the

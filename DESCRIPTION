@@ -1,7 +1,7 @@
 Package: hmmTMB
 Type: Package
 Title: Fit Hidden Markov Models using Template Model Builder
-Version: 1.0.1
+Version: 1.0.2
 Authors@R: c(
   person(given = "Theo",
          family = "Michelot",
@@ -22,11 +22,11 @@ Imports: Matrix, stringr, optimx, CircStats, MASS, tmbstan, methods
 LinkingTo: TMB, RcppEigen
 Suggests: rstan, testthat, knitr, moveHMM, scico, MSwM, unmarked
 Encoding: UTF-8
-RoxygenNote: 7.2.2
+RoxygenNote: 7.2.3
 VignetteBuilder: knitr
 NeedsCompilation: yes
-Packaged: 2023-01-12 16:20:51 UTC; theo
+Packaged: 2023-10-24 20:14:11 UTC; theo
 Author: Theo Michelot [aut, cre],
   Richard Glennie [aut, ctb]
 Repository: CRAN
-Date/Publication: 2023-01-13 09:10:02 UTC
+Date/Publication: 2023-10-24 20:40:02 UTC

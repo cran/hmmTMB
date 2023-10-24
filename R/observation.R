@@ -1,6 +1,7 @@
 
-#' R6 class for HMM observation model
+#' @title R6 class for HMM observation model
 #'
+#' @description
 #' Contains the data, distributions, parameters, and formulas for
 #' the observation model from a hidden Markov model.
 #' 
@@ -493,7 +494,7 @@ Observation <- R6Class(
     #' the design matrices are based on the original data frame. 
     #' 
     #' @return A list with elements:
-    #' \itemize{
+    #' \describe{
     #'   \item{X_fe}{Design matrix for fixed effects}
     #'   \item{X_re}{Design matrix for random effects}
     #'   \item{S}{Smoothness matrix for random effects}
@@ -506,7 +507,7 @@ Observation <- R6Class(
                     new_data = new_data)
     },
     
-    #' Design matrices for grid of covariates
+    #' @description Design matrices for grid of covariates
     #' 
     #' @param var Name of variable
     #' @param covs Optional named list for values of covariates (other than 'var') 
@@ -640,7 +641,8 @@ Observation <- R6Class(
               # Loop over states (columns of prob)
               for (s in 1:n_states) {
                 prob[i, s] <- prob[i, s] * 
-                  obsdist$pdf_apply(x = data[i, varnms[var]], par = par[par_ind, s, i])
+                  obsdist$pdf_apply(x = data[[varnms[var]]][i], 
+                                    par = par[par_ind, s, i])
               }            
             }
           }
@@ -655,6 +657,59 @@ Observation <- R6Class(
       }
       
       return(prob)
+    },
+    
+    #' @description Cumulative probabilities of observations
+    #' 
+    #' @return List of cumulative probabilities, with one element for each
+    #' observed variable. Matrix rows correspond to time steps, and columns
+    #' correspond to states.
+    cdf = function() {
+      # Data frame of observations
+      data <- self$obs_var()
+      
+      # Number of observations
+      n <- nrow(data)
+      # Number of states
+      n_states <- self$nstates()
+      # Number of variables
+      n_var <- ncol(self$obs_var())
+      
+      # State-dependent parameters
+      par <- self$par(t = "all", full_names = FALSE)
+      # Indices of parameters for each variable in 'par'
+      par_ind <- c(1, cumsum(sapply(self$dists(), function(x) x$npar())) + 1)
+      
+      # Get variable names 
+      var_names <- names(self$obs_var())
+      
+      # Initialise output list
+      cdf_list <- list()
+      
+      # Loop over observed variables
+      for(var in 1:n_var) {
+        # Initialise matrix of probabilities
+        cdf_mat <- matrix(NA, nrow = n, ncol = n_states)
+        colnames(cdf_mat) <- paste("state", 1:n_states)
+        # Loop over observed variables
+        obsdist <- self$dists()[[var]]
+        this_par_ind <- par_ind[var]:(par_ind[var + 1] - 1)
+        
+        # Loop over observations (rows of cdf_mat)
+        for (i in 1:n) {
+          # Loop over states (columns of cdf_mat)
+          for (s in 1:n_states) {
+            par_ls <- as.list(c(q = data[i, var_names[var]], 
+                                par[this_par_ind, s, i]))
+            cdf_mat[i, s] <- do.call(obsdist$cdf(), par_ls)
+          }
+        }
+        
+        cdf_list[[var]] <- cdf_mat
+      }
+      names(cdf_list) <- var_names
+
+      return(cdf_list)
     },
     
     #' @description Suggest initial observation parameters
@@ -803,7 +858,7 @@ Observation <- R6Class(
       
       # Create ggplot histogram
       p <- ggplot(obs, aes(x = val)) + xlab(var) +
-        geom_histogram(breaks = breaks, aes(y=..density..), 
+        geom_histogram(breaks = breaks, aes(y = after_stat(density)), 
                        col = "white", bg = "lightgrey", na.rm = TRUE) + 
         geom_line(aes(grid, val, col = state, linetype = state), 
                   data = df_dens, size = 0.7) +
@@ -973,33 +1028,37 @@ Observation <- R6Class(
           var_name <- names(self$dists())[i]
           # Observations for this variable
           obs <- self$data()[[var_name]]
-          
+          which_notNA <- which(!is.na(obs))
+          obs_notNA <- obs[which_notNA]
+                    
           # If factor/character, convert to 1:N where N = # categories
           if(is.factor(obs) | is.character(obs)) {
-            obs <- factor(obs)
-            lv <- levels(obs) # save to print below
-            levels(obs) <- 1:length(unique(obs))
-            obs <- as.numeric(as.character(obs))
+            obs_notNA <- factor(obs_notNA)
+            lv <- levels(obs_notNA) # save to print below
+            levels(obs_notNA) <- 1:length(unique(obs_notNA))
+            obs_notNA <- as.numeric(as.character(obs_notNA))
             new_data <- self$data()
-            new_data[[var_name]] <- obs
+            new_data[[var_name]] <- NA
+            new_data[[var_name]][which_notNA] <- obs_notNA
             self$update_data(data = new_data)
             msg <- paste0("Converting variable '", var_name, "' from factor/",
-                          "character to integers between 1 and ", max(obs), ":")
+                          "character to integers between 1 and ", 
+                          max(obs_notNA), ":")
             message(msg)
-            message(paste0(as.character(lv), " = ", 1:length(unique(obs)), 
+            message(paste0(as.character(lv), " = ", 1:length(unique(obs_notNA)), 
                            collapse = "\n"))
           } else if(is.numeric(obs)) {
-            if(any(obs != round(obs))) {
+            if(any(obs_notNA != round(obs_notNA))) {
               stop(paste0("Observations for variable '", var_name, "' must be ",
                           "integers to fit a categorical distribution."))
-            } else if(any(!obs %in% 1:length(unique(obs)))) {
+            } else if(any(!obs_notNA %in% 1:length(unique(obs_notNA)))) {
               stop(paste0("Observations for variable '", var_name, "' must be ",
                           "integers between 1 and the number of categories"))
             }
           }
           
           # Update number and names of parameters
-          npar <- length(unique(obs)) - 1
+          npar <- length(unique(obs_notNA)) - 1
           parnames <- paste0("p", 2:(npar + 1))
           self$dists()[[i]]$set_npar(npar)
           self$dists()[[i]]$set_parnames(parnames)

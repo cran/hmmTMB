@@ -1,6 +1,7 @@
 
-#' R6 class for HMM hidden process model
+#' @title R6 class for HMM hidden process model
 #'
+#' @description
 #' Contains the parameters and model formulas for the hidden process model.
 #' 
 #' @export
@@ -124,6 +125,19 @@ MarkovChain <- R6Class(
       if(length(initial_state) == 1) {
         if(initial_state == "stationary") {
           private$stationary_ <- TRUE          
+        }
+      }
+      
+      # Should initial distribution be estimated? If there are many IDs,
+      # ask user to check that this is really the best option.
+      if(length(initial_state) == 1) {
+        if(initial_state == "estimated") {
+          if(length(self$unique_ID()) >= 8) {
+            message(paste("Large number of time series in the data.",
+                          "Consider changing the 'initial_state' argument",
+                          "to avoid estimating a different initial state",
+                          "distribution for each time series."))
+          }
         }
       }
       
@@ -510,7 +524,7 @@ MarkovChain <- R6Class(
     #' the full range of covariate values.
     #' 
     #' @return A list with elements:
-    #' \itemize{
+    #' \describe{
     #'   \item{X_fe}{Design matrix for fixed effects}
     #'   \item{X_re}{Design matrix for random effects}
     #'   \item{S}{Smoothness matrix for random effects}

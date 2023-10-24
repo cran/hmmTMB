@@ -1,0 +1,6 @@
+Wishlist 
+==============
+
+- Non-parametric state-dependent distributions a la Langrock et al. (2015)
+- Hierarchical HMMs 
+- Continuous-time HMMs 

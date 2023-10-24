@@ -1,6 +1,7 @@
 
-#' R6 class for hidden Markov model
+#' @title R6 class for hidden Markov model
 #'
+#' @description
 #' Encapsulates the observation and hidden state models for a hidden
 #' Markov model.
 #' 
@@ -8,7 +9,7 @@
 #' @importFrom mgcv gam rmvn dmvn
 #' @importFrom ggplot2 ggplot aes theme_light geom_line theme scale_colour_manual
 #' facet_wrap label_bquote xlab ylab ggtitle element_blank element_text geom_point
-#' geom_ribbon scale_size_manual geom_histogram geom_vline geom_errorbar
+#' geom_ribbon scale_size_manual geom_histogram geom_vline geom_errorbar after_stat
 #' @importFrom TMB MakeADFun sdreport
 #' @importFrom stringr str_trim str_split str_split_fixed
 #' @importFrom optimx optimx
@@ -151,7 +152,7 @@ HMM <- R6Class(
     
     #' @description Model object created by TMB. This is the output of 
     #' the TMB function \code{MakeADFun}, and it is a list including elements
-    #' \itemize{
+    #' \describe{
     #'   \item{\code{fn}}{Objective function}
     #'   \item{\code{gr}}{Gradient function of fn}
     #'   \item{\code{par}}{Vector of initial parameters on working scale}
@@ -166,7 +167,7 @@ HMM <- R6Class(
     #' @description Model object created by TMB for the joint likelihood of
     #' the fixed and random effects. This is the output of the TMB function 
     #' \code{MakeADFun}, and it is a list including elements
-    #' \itemize{
+    #' \describe{
     #'   \item{\code{fn}}{Objective function}
     #'   \item{\code{gr}}{Gradient function of fn}
     #'   \item{\code{par}}{Vector of initial parameters on working scale}
@@ -336,7 +337,7 @@ HMM <- R6Class(
     #' @param t returns parameters at time t, default is t = 1 
     #' 
     #' @return A list with elements:
-    #' \itemize{
+    #' \describe{
     #'   \item{\code{obspar}}{Parameters of observation model}
     #'   \item{\code{tpm}}{Transition probability matrix of hidden state model}
     #' }
@@ -438,16 +439,8 @@ HMM <- R6Class(
       if(is.null(private$tmb_obj_)) {
         self$setup(silent = TRUE)
       }
-      # set parameter vector to current values
-      par <- c(self$obs()$coeff_fe(), 
-               self$obs()$lambda(), 
-               self$hid()$coeff_fe(), 
-               self$hid()$lambda())
-      if(!self$hid()$stationary()) {
-        par <- c(par, self$hid()$delta0(log = TRUE, as_matrix = FALSE))
-      }
       # compute log-likelihood
-      return(-self$tmb_obj()$fn(par))
+      return(-self$tmb_obj()$fn(self$tmb_obj()$par))
     },
     
     #' @description Effective degrees of freedom
@@ -494,6 +487,20 @@ HMM <- R6Class(
     },
     
     # Model fitting -----------------------------------------------------------
+    
+    #' @description Suggest initial parameter values
+    #' 
+    #' Uses K-means clustering to split the data into naive "states", and
+    #' estimates observation parameters within each of these states. This is
+    #' meant to help with selecting initial parameter values before model
+    #' fitting, but users should still think about the values carefully,
+    #' and try multiple set of initial parameter values to ensure
+    #' convergence to the global maximum of the likelihood function.
+    #' 
+    #' @return List of initial parameters
+    suggest_initial = function() {
+      self$obs()$suggest_initial()
+    },
     
     #' @description TMB setup
     #' 
@@ -596,14 +603,13 @@ HMM <- R6Class(
       for (i in seq_along(par_list)) {
         # Vector of parameters
         v <- par_list[[par_names[i]]]
-        fix_or_not <- rep(0, length(v))
-        names(fix_or_not) <- rep(par_names[i], length(v))
         
+        # Map vector for TMB
+        tmp <- seq_along(v) 
         # Check if user-specified constraint
         fixed <- fixpar[[usernms[i]]]
-        if (!is.null(fixed)) {
-          # Map vector for TMB
-          tmp <- 1:length(v)
+        mode(fixed) <- "integer"
+        if (length(fixed) > 0) {
           # Increase fixed to make sure it's not between 1:length(v)
           fixed <- fixed + length(v)
           if(is.matrix(v)) {
@@ -612,16 +618,21 @@ HMM <- R6Class(
             nms <- names(v)
           }
           # Set map to user input
-          tmp[nms %in% names(fixed)] <- as.numeric(fixed)
-          tmp <- factor(as.vector(tmp))
+          tmp[nms %in% names(fixed)] <- fixed
+          tmp <- factor(as.vector(tmp), levels = unique(as.vector(tmp)))
           ls <- list(tmp)
           names(ls) <- par_names[i]
           map <- c(map, ls)
-          # Which parameters are fixed
-          if(any(is.na(tmp))) {
-            fix_or_not[which(is.na(tmp))] <- 1
-          }
+          # # Which parameters are fixed
+          # if(any(is.na(tmp))) {
+          #   fix_or_not[which(is.na(tmp))] <- 1
+          # }
         }
+        fix_or_not <- as.numeric(tmp) + 
+          ifelse(test = is.null(fixpar_vec) | all(is.na(fixpar_vec)), 
+                 yes = 0, 
+                 no = max(fixpar_vec, na.rm = TRUE))
+        names(fix_or_not) <- rep(par_names[i], length(v))
         fixpar_vec <- c(fixpar_vec, fix_or_not)
       }
       coeff_array <- cbind(fixpar_vec, unlist(par_list, use.names = FALSE))
@@ -663,7 +674,7 @@ HMM <- R6Class(
                       log_lambda_hid_prior = priors$log_lambda_hid)
       
       # Create TMB model
-      obj <- MakeADFun(tmb_dat, tmb_par, dll = "hmmTMB", 
+      obj <- MakeADFun(tmb_dat, tmb_par, DLL = "hmmTMB", 
                        random = random,
                        map = map, 
                        silent = silent)
@@ -680,7 +691,7 @@ HMM <- R6Class(
       
       # Joint negative log-likelihood function
       tmb_dat$include_smooths <- -1
-      private$tmb_obj_joint_ <- MakeADFun(tmb_dat, tmb_par, dll = "hmmTMB", 
+      private$tmb_obj_joint_ <- MakeADFun(tmb_dat, tmb_par, DLL = "hmmTMB", 
                                           map = map, silent = silent)
     },
     
@@ -713,7 +724,7 @@ HMM <- R6Class(
       }
       
       # Run Stan iterations 
-      private$out_stan_ <- tmbstan(private$tmb_obj_, init = "par", ...)
+      private$out_stan_ <- tmbstan(obj = private$tmb_obj_, init = "par", ...)
       post <- as.matrix(private$out_stan_)
       # Remove "lp__" column
       post <- post[,-ncol(post)]
@@ -725,7 +736,8 @@ HMM <- R6Class(
                       nrow = n_post, ncol = n_coeff)
       colnames(iters) <- rownames(self$coeff_array())
       # Fill non-fixed columns with posterior samples
-      iters[,which(self$coeff_array()[,"fixed"] == 0)] <- post
+      # Do I need to account for shared parameter values? See post_coeff
+      iters[,which(!is.na(self$coeff_array()[,"fixed"]))] <- post
       private$iters_ <- iters
       
       # Get iterations on response scale 
@@ -756,11 +768,17 @@ HMM <- R6Class(
     #' @description Model fitting
     #' 
     #' The negative log-likelihood of the model is minimised using the
-    #' function \code{optimx}. TMB uses the Laplace approximation to integrate 
+    #' function \code{optimx()}. TMB uses the Laplace approximation to integrate 
     #' the random effects out of the likelihood.
     #' 
-    #' After the model has been fitted, the output of \code{optim} can be
-    #' accessed using the method \code{out}.
+    #' After the model has been fitted, the output of \code{optimx()} can be
+    #' accessed using the method \code{out()}. The estimated parameters can
+    #' be accessed using the methods \code{par()} (for the HMM parameters, 
+    #' possibly dependent on covariates), \code{predict()} (for uncertainty
+    #' quantification and prediction of the HMM parameters for new covariate 
+    #' values), \code{coeff_fe()} (for estimated fixed effect coefficients on
+    #' the linear predictor scale), and \code{coeff_re()} (for estimated random
+    #' effect coefficients on the linear predictor scale).
     #' 
     #' @param silent Logical. If FALSE, all tracing outputs are shown (default).
     #' @param ... Other arguments to optimx which is used to optimise likelihood, 
@@ -923,122 +941,62 @@ HMM <- R6Class(
       return(list(logforward = lforw, logbackward = lback))
     }, 
     
-    # Conditional distributions -----------------------------------------------
-    
-    #' @description Compute conditional cumulative distribution functions 
-    #' 
-    #' @param ngrid how many cells on the grid that CDF is computed on 
-    #' @param silent if TRUE then no messages are printed 
-    #' 
-    #' @return cdfs on grid for each variable 
-    cond = function(ngrid = 1000, silent = FALSE) {
-      delta0 <- self$hid()$delta0()
-      vars <- self$obs()$obs_var()
-      nvars <- ncol(vars)
-      n <- nrow(self$obs()$data())
-      range <- matrix(0, nr = 2, nc = nvars)
-      range[1,] <- sapply(vars, min, na.rm = TRUE)  
-      range[2,] <- sapply(vars, max, na.rm = TRUE)
-      # get forward-backward probabilities
-      fb <- self$forward_backward() 
-      lforw <- fb$logforward
-      lback <- fb$logbackward
-      # get transition matrices
-      tpms <- self$hid()$tpm(t = "all")
-      # scaling 
-      forwscale <- apply(lforw, 2, max)
-      backscale <- apply(lback, 2, max)
-      # compute conditional state probabilities
-      if (!silent) cat("Computing conditional state probabilities...")
-      cond <- matrix(0, nr = n, nc = self$hid()$nstates()) 
-      k <- 1
-      for (i in 1:n) {
-        if (i == 1 || (self$obs()$data()$ID[i] != self$obs()$data()$ID[i - 1])) {
-          f <- log(delta0[k,])
-          k <- k + 1
-        } else {
-          f <- lforw[,i]
-        }
-        p <- (exp(f - forwscale[i]) %*% tpms[, , i]) * exp(lback[, i] - backscale[i])
-        cond[i, ] <- p / sum(p)
-      }
-      if(!silent) cat("done\n")
-      # list to store pdfs 
-      pdfs <- vector(mode = "list", length = nvars)
-      grids <- vector(mode = "list", length = nvars)
-      # compute cdf for each variable 
-      obsmats <- self$obs()$terms()
-      varnms <- names(vars)
-      for (i in 1:nvars) {
-        if (!silent) cat("Computing CDF for", varnms[i], "...")
-        grid <- seq(range[1, i], range[2, i], length = ngrid)
-        if (is_whole_number(vars[,i])) {
-          grid <- unique(floor(grid))
-        }
-        pdfs[[i]] <- matrix(0, nr = n, nc = length(grid))
-        grids[[i]] <- grid 
-        for (g in 1:length(grid)) {
-          tmp <- data.frame(var = rep(grid[g], n))
-          colnames(tmp) <- varnms[i]
-          probs <- self$obs()$obs_probs(data = tmp)
-          pdfs[[i]][, g] <- rowSums(probs * cond)
-        }
-        if (!silent) cat("done\n")
-      }
-      return(list(grids = grids, pdfs = pdfs))
-    }, 
-    
     # Pseudo-residuals --------------------------------------------------------
-    
     #' @description Pseudo-residuals
-    #' 
+    #'
     #' Compute pseudo-residuals for the fitted model. If the fitted model
-    #' is the "true" model, the pseudo-residuals follow a standard normal distribution.
-    #' Deviations from normality suggest lack of fit.
+    #' is the "true" model, the pseudo-residuals follow a standard normal 
+    #' distribution. Deviations from normality suggest lack of fit.
     #' 
-    #' @return Matrix of pseudo-residuals, with one row for each response variable
-    #' and one column for each observation
+    #' @return List (of length the number of variables), where each element is
+    #' a vector of pseudo-residuals (of length the number of data points)
     pseudores = function() {
-      n <- nrow(self$obs()$data())
-      cat("Computing conditional CDFs... ")
-      cond <- self$cond(silent = TRUE)
+      ID <- self$obs()$data()$ID
+      n <- length(ID)
+      # Matrix of CDFs at observations
+      cat("Computing CDFs... ")
+      cdfs <- self$obs()$cdf()
       cat("done\n")
-      pdfs <- cond$pdfs
-      grids <- cond$grids
-      vars <- self$obs()$obs_var()
-      nvars <- ncol(vars)
-      varnms <- names(vars)
-      # sum CDFs cumulatively 
-      cdfs <- vector(mode = "list", length = length(pdfs))
-      for (v in 1:nvars) {
-        # apply normalisation to PDFs to reduce effect of griding 
-        cdfs[[v]] <- t(apply(pdfs[[v]], 1, FUN = function(x) {cumsum(x)/sum(x)}))
-      }
-      # do residuals for each variable 
-      r <- matrix(0, nr = nvars, nc = n)
-      rownames(r) <- varnms 
-      for (v in 1:nvars) {
-        cat("Computing residuals for", varnms[v], "... ")
-        for (i in 1:length(vars[,v])) {
-          if (is.na(vars[i, v])) {
-            r[v, i] <- NA
-            next
+      n_var <- length(cdfs)
+      # Transition probability matrices
+      tpms <- self$hid()$tpm(t = "all")
+      # Log-forward probabilities
+      logforw <- self$forward_backward()$logforward
+      
+      # Loop over observed variables
+      res_ls <- list()
+      for(var in 1:n_var) {
+        # Vector of residuals for this variable
+        res <- rep(NA, n)
+        
+        if(all(is.na(cdfs[[var]]))) {
+          message(paste0("Pseudo-residuals not implemented for '", 
+                         hmm$obs()$dists()[[2]]$name(), "' distribution. ",
+                         "Returning NA."))
+        } else {
+          cat("Computing residuals for", names(cdfs)[var], "... ")
+          
+          # Loop over time steps
+          res[1] <- qnorm(t(self$hid()$delta0()[1,]) %*% cdfs[[var]][1,])
+          for(i in 2:n) {
+            if(ID[i] != ID[i-1]) {
+              res[i] <- qnorm(t(self$hid()$delta0()[ID[i],]) %*% cdfs[[var]][i,])
+            } else {
+              # c cancels out below (to avoid numerical issues)
+              c <- max(logforw[, i - 1])
+              a <- exp(logforw[, i - 1] - c)
+              res[i] <- qnorm(t(a) %*% (tpms[,,i]/sum(a)) %*% cdfs[[var]][i,])
+            }
           }
-          dist <- vars[i, v] - grids[[v]]
-          wh <- which.min(abs(dist))
-          val <- cdfs[[v]][i, wh]
-          if ((dist[wh] < 1e-16 & wh > 1) | (wh > length(grids[[v]]) - 1)) {
-            wh2 <- wh - 1
-          } else {
-            wh2 <- wh + 1
-          }
-          val <- (val + cdfs[[v]][i, wh2]) / 2
-          r[v, i] <- qnorm(val - 1e-16)
+          cat("done\n")
         }
-        cat("done\n")
+        
+        res_ls[[var]] <- res
       }
-      return(r)
-    }, 
+      names(res_ls) <- names(cdfs)
+      
+      return(res_ls)
+    },
     
     # State estimation --------------------------------------------------------
     
@@ -1241,7 +1199,8 @@ HMM <- R6Class(
       colnames(post_all) <- rownames(self$coeff_array())
       
       # Fill non-fixed columns with posterior samples
-      post_all[,which(self$coeff_array()[,"fixed"] == 0)] <- post
+      post_all[,which(!is.na(self$coeff_array()[,"fixed"]))] <- 
+        post[,na.omit(self$coeff_array()[,"fixed"])]
       
       return(post_all)
     },
@@ -1300,7 +1259,7 @@ HMM <- R6Class(
     #' are returned
     #' 
     #' @return A list with elements:
-    #' \itemize{
+    #' \describe{
     #'   \item{post}{If return_post = TRUE, this is a vector (for scalar 
     #'   outputs of fn) or matrix (for vector outputs) with a column for 
     #'   each simulation}
@@ -1590,7 +1549,7 @@ HMM <- R6Class(
     #' (Default: TRUE)
     #' 
     #' @return List with elements:
-    #' \itemize{
+    #' \describe{
     #'   \item{obs_stat: }{Vector of values of goodness-of-fit statistics for the
     #'   observed data}
     #'   \item{stats: }{Matrix of values of goodness-of-fit statistics for the
@@ -1819,7 +1778,7 @@ HMM <- R6Class(
                           alpha = 0.5, width = 0.2) +
             theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
         } else {
-          p <- p + geom_line(size = 0.7) +
+          p <- p + geom_line(linewidth = 0.7) +
             geom_ribbon(aes(ymin = lcl, ymax = ucl), alpha = 0.3)
         }
       } else {
@@ -1848,7 +1807,7 @@ HMM <- R6Class(
                           alpha = 0.5, width = 0.2) +
             theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
         } else {
-          p <- p + geom_line(size = 0.7) +
+          p <- p + geom_line(linewidth = 0.7) +
             geom_ribbon(aes(ymin = lcl, ymax = ucl, fill = state), 
                         col = NA, alpha = 0.3)
         }
@@ -1877,6 +1836,11 @@ HMM <- R6Class(
         npar <- npar + length(self$coeff_list()$log_delta0)
       }
       
+      if(nrow(self$obs()$coeff_re()) + nrow(self$hid()$coeff_re()) > 0) {
+        warning("AIC functions are experimental for models with random effects",
+                " or splines. Use at your own risk.")
+      }
+      
       aic <- - 2 * llk + 2 * npar
       
       return(aic)
@@ -1898,6 +1862,11 @@ HMM <- R6Class(
       
       llk <- - self$tmb_obj_joint()$fn(par_all)
       npar <- self$edf()
+      
+      if(nrow(self$obs()$coeff_re()) + nrow(self$hid()$coeff_re()) > 0) {
+        warning("AIC functions are experimental for models with random effects",
+                " or splines. Use at your own risk.")
+      }
       
       aic <- - 2 * llk + 2 * npar
       
@@ -1967,7 +1936,7 @@ HMM <- R6Class(
     ## @param file File location 
     ## 
     ## @return List with elements:
-    ## \itemize{
+    ## \describe{
     ##   \item{\code{data}}{Data frame}
     ##   \item{\code{nstates}}{Number of states}
     ##   \item{\code{dists}}{List of observation distributions}

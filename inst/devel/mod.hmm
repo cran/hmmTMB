@@ -1,0 +1,16 @@
+DATA 
+dataset = dat
+nstates = 2 
+
+DISTRIBUTION
+count ~ pois
+
+INITIAL 
+count:  
+  rate = 2, 6
+tpm: 
+  0.9, 0.1,
+  0.2, 0.8
+
+ 
+

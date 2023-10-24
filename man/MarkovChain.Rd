@@ -4,11 +4,6 @@
 \alias{MarkovChain}
 \title{R6 class for HMM hidden process model}
 \description{
-R6 class for HMM hidden process model
-
-R6 class for HMM hidden process model
-}
-\details{
 Contains the parameters and model formulas for the hidden process model.
 }
 \examples{
@@ -605,7 +600,7 @@ the full range of covariate values.}
 }
 \subsection{Returns}{
 A list with elements:
-\itemize{
+\describe{
   \item{X_fe}{Design matrix for fixed effects}
   \item{X_re}{Design matrix for random effects}
   \item{S}{Smoothness matrix for random effects}

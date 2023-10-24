@@ -4,11 +4,6 @@
 \alias{Observation}
 \title{R6 class for HMM observation model}
 \description{
-R6 class for HMM observation model
-
-R6 class for HMM observation model
-}
-\details{
 Contains the data, distributions, parameters, and formulas for
 the observation model from a hidden Markov model.
 }
@@ -129,6 +124,7 @@ obs$par()
 \item \href{#method-Observation-w2n}{\code{Observation$w2n()}}
 \item \href{#method-Observation-linpred}{\code{Observation$linpred()}}
 \item \href{#method-Observation-obs_probs}{\code{Observation$obs_probs()}}
+\item \href{#method-Observation-cdf}{\code{Observation$cdf()}}
 \item \href{#method-Observation-suggest_initial}{\code{Observation$suggest_initial()}}
 \item \href{#method-Observation-plot_dist}{\code{Observation$plot_dist()}}
 \item \href{#method-Observation-formulation}{\code{Observation$formulation()}}
@@ -633,20 +629,20 @@ the design matrices are based on the original data frame.}
 }
 \subsection{Returns}{
 A list with elements:
-\itemize{
+\describe{
   \item{X_fe}{Design matrix for fixed effects}
   \item{X_re}{Design matrix for random effects}
   \item{S}{Smoothness matrix for random effects}
   \item{ncol_fe}{Number of columns of X_fe for each parameter}
   \item{ncol_re}{Number of columns of X_re and S for each random effect}
 }
-Design matrices for grid of covariates
 }
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Observation-make_newdata_grid"></a>}}
 \if{latex}{\out{\hypertarget{method-Observation-make_newdata_grid}{}}}
 \subsection{Method \code{make_newdata_grid()}}{
+Design matrices for grid of covariates
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Observation$make_newdata_grid(var, covs = NULL, n_grid = 1000)}\if{html}{\out{</div>}}
 }
@@ -747,6 +743,21 @@ Observation likelihoods
 \subsection{Returns}{
 Matrix of likelihoods of observations, with one row for each 
 time step, and one column for each state.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Observation-cdf"></a>}}
+\if{latex}{\out{\hypertarget{method-Observation-cdf}{}}}
+\subsection{Method \code{cdf()}}{
+Cumulative probabilities of observations
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Observation$cdf()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+List of cumulative probabilities, with one element for each
+observed variable. Matrix rows correspond to time steps, and columns
+correspond to states.
 }
 }
 \if{html}{\out{<hr>}}

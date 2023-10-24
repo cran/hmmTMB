@@ -1,6 +1,7 @@
 
-#' R6 class for probability distribution
+#' @title R6 class for probability distribution
 #' 
+#' @description
 #' Contains the probability density/mass function, and the link and inverse link 
 #' functions for a probability distribution.
 #' 
@@ -18,6 +19,9 @@ Dist <- R6Class(
     #' (e.g. \code{dnorm} for normal distribution).
     #' @param rng Random generator function of the distribution (e.g.
     #' \code{rnorm} for normal distribution).
+    #' @param cdf Cumulative distribution function of the distribution
+    #' (e.g., \code{pnorm} for normal distribution). This is used to compute
+    #' pseudo-residuals.
     #' @param link Named list of link functions for distribution parameters
     #' @param invlink Named list of inverse link functions for distribution
     #' parameters
@@ -32,8 +36,9 @@ Dist <- R6Class(
     #' 
     #' @return A new Dist object
     initialize = function(name, 
-                          pdf, 
-                          rng, 
+                          pdf,
+                          rng,
+                          cdf = NULL,
                           link, 
                           invlink, 
                           npar, 
@@ -53,6 +58,7 @@ Dist <- R6Class(
       # Define private data members 
       private$name_ <- name
       private$pdf_ <- pdf
+      private$cdf_ <- cdf
       private$rng_ <- rng
       private$link_ <- link
       private$invlink_ <- invlink
@@ -74,6 +80,9 @@ Dist <- R6Class(
     
     #' @description Return pdf of Dist object
     pdf = function() {return(private$pdf_)},
+    
+    #' @description Return cdf of Dist object
+    cdf = function() {return(private$cdf_)},
     
     #' @description Return random generator function of Dist object
     rng = function() {return(private$rng_)},
@@ -240,8 +249,9 @@ Dist <- R6Class(
 
     # Data members ------------------------------------------------------------
     name_ = NULL, # name of distribution 
-    pdf_ = NULL, # pdf function 
+    pdf_ = NULL, # pdf 
     rng_ = NULL, # random number generator 
+    cdf_ = NULL, # cdf 
     link_ = NULL, # list of link functions or all-in-one link function 
     invlink_ = NULL, # list of inverse link functions or all-in-one inverse link 
     npar_ = NULL, # number of parameters for this distribution 

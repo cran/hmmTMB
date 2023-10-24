@@ -10,6 +10,9 @@ dist_pois <- Dist$new(
   pdf = function(x, rate, log = FALSE) {
     dpois(x = x, lambda = rate, log = log)
   },
+  cdf = function(q, rate) {
+    ppois(q = q, lambda = rate)
+  },
   rng = function(n, rate) {
     rpois(n = n, lambda = rate)
   },
@@ -32,6 +35,9 @@ dist_zipois <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, rate, z) {
+    return(NA)
+  },
   rng = function(n, rate, z) {
     zero <- rbinom(n, 1, z)
     y <- rpois(n, rate)
@@ -67,6 +73,9 @@ dist_ztpois <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, rate) {
+    return(NA)
+  },
   rng = function(n, rate) {
     y <- NULL 
     while (length(y) < n) {
@@ -91,6 +100,7 @@ dist_binom <- Dist$new(
   name = "binom", 
   name_long = "binomial",
   pdf = dbinom, 
+  cdf = pbinom,
   rng = rbinom, 
   link = list(size = identity, prob = qlogis), 
   invlink = list(size = identity, prob = plogis),
@@ -113,6 +123,9 @@ dist_zibinom <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, size, prob, z) {
+    return(NA)
+  },
   rng = function(n, size, prob, z) {
     zero <- rbinom(n, 1, z)
     y <- rbinom(n, size, prob)
@@ -145,6 +158,7 @@ dist_nbinom <- Dist$new(
   name = "nbinom", 
   name_long = "negative binomial",
   pdf = dnbinom, 
+  cdf = pnbinom,
   rng = rnbinom, 
   link = list(size = log, prob = qlogis), 
   invlink = list(size = exp, prob = plogis), 
@@ -174,6 +188,9 @@ dist_cat <- Dist$new(
     if (log) val <- log(val)
     return(val)
   }, 
+  cdf = function(q, ...) {
+    return(NA)
+  },
   rng = function(n, ...) {
     # get class probabilities
     p <- c(...) 
@@ -218,6 +235,9 @@ dist_zinbinom <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, size, prob, z) {
+    return(NA)
+  },
   rng = function(n, size, prob, z) {
     zero <- rbinom(n, 1, z)
     y <- rnbinom(n, size, prob)
@@ -256,6 +276,9 @@ dist_ztnbinom <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, size, prob) {
+    return(NA)
+  },
   rng = function(n, size, prob) {
     y <- NULL 
     while (length(y) < n) {
@@ -285,6 +308,7 @@ dist_norm <- Dist$new(
   name = "norm", 
   name_long = "normal",
   pdf = dnorm,
+  cdf = pnorm,
   rng = rnorm,
   link = list(mean = identity, sd = log),
   invlink = list(mean = identity, sd = exp),
@@ -309,6 +333,9 @@ dist_truncnorm <- Dist$new(
     p <- p / sd
     if (log) p <- log(p)
     return(p)
+  },
+  cdf = function(q, mean, sd, min, max) {
+    return(NA)
   },
   rng = function(n, mean, sd, min = -Inf, max = Inf) {
     u <- runif(n)
@@ -337,6 +364,9 @@ dist_foldednorm <- Dist$new(
     if (log) p <- log(p)
     return(p)
   },
+  cdf = function(q, mean, sd) {
+    return(NA)
+  },
   rng = function(n, mean, sd) {
     x <- rnorm(n, mean, sd)
     y <- abs(x)
@@ -362,6 +392,9 @@ dist_t <- Dist$new(
     df <- 2 * scale^2 / (scale^2 - 1)
     return(dt(y, df = df, log = log))
   }, 
+  cdf = function(q, mean, scale) {
+    pt(q = q - mean, df = 2 * scale^2 / (scale^2 - 1))
+  },
   rng = function(n, mean, scale) {
     df <- 2 * scale^2 / (scale^2 - 1)
     y <- rt(n, df = df)
@@ -382,6 +415,7 @@ dist_lnorm <- Dist$new(
   name = "lnorm", 
   name_long = "log-normal",
   pdf = dlnorm,
+  cdf = plnorm,
   rng = rlnorm,
   link = list(meanlog = identity, sdlog = log),
   invlink = list(meanlog = identity, sdlog = exp),
@@ -396,6 +430,7 @@ dist_lnorm <- Dist$new(
 dist_gamma <- Dist$new(
   name = "gamma",
   pdf = dgamma,
+  cdf = pgamma,
   rng = rgamma,
   link = list(shape = log, scale = log),
   invlink = list(shape = exp, scale = exp),
@@ -419,6 +454,12 @@ dist_gamma2 <- Dist$new(
     shape <- mean / scale 
     l <- dgamma(x, shape = shape, scale = scale, log = log)
     return(l)
+  },
+  cdf = function(q, mean, sd) {
+    scale <- sd^2 / mean 
+    shape <- mean / scale 
+    p <- pgamma(q = q, shape = shape, scale = scale)
+    return(p)
   },
   rng = function(n, mean, sd) {
     scale <- sd^2 / mean 
@@ -448,6 +489,9 @@ dist_zigamma <- Dist$new(
         if (log) l <- log(l)
         return(l)
     }, 
+    cdf = function(q, shape, scale, z) {
+      return(NA)
+    },
     rng = function(n, shape, scale, z) {
         zero <- rbinom(n, 1, z)
         y <- rgamma(n, shape = shape, scale = scale)
@@ -482,6 +526,9 @@ dist_zigamma2 <- Dist$new(
     if (log) l <- log(l)
     return(l)
   }, 
+  cdf = function(q, mean, sd, z) {
+    return(NA)
+  },
   rng = function(n, mean, sd, z) {
     shape <- mean^2 / sd^2
     scale <- sd^2 / mean
@@ -508,6 +555,7 @@ dist_weibull <- Dist$new(
   name = "weibull", 
   name_long = "Weibull",
   pdf = dweibull,
+  cdf = pweibull,
   rng = rweibull,
   link = list(shape = log, scale = log),
   invlink = list(shape = exp, scale = exp),
@@ -532,6 +580,7 @@ dist_exp <- Dist$new(
   name = "exp", 
   name_long = "exponential",
   pdf = dexp, 
+  cdf = pexp,
   rng = rexp, 
   link = list(rate = log), 
   invlink = list(rate = exp), 
@@ -546,6 +595,7 @@ dist_exp <- Dist$new(
 dist_beta <- Dist$new(
   name = "beta",
   pdf = dbeta,
+  cdf = pbeta,
   rng = rbeta,
   link = list(shape1 = log, shape2 = log),
   invlink = list(shape1 = exp, shape2 = exp),
@@ -580,6 +630,9 @@ dist_tweedie <- Dist$new(
     if (!log) l <- exp(l)
     return(l)
   }, 
+  cdf = function(q, mean, p, phi) {
+    return(NA)
+  },
   rng = function(n, mean, p, phi) {
     return(rTweedie(rep(mean, n), p + 1, phi))
   }, 
@@ -609,6 +662,9 @@ dist_vm <- Dist$new(
     else
       val <- - log(2 * pi * b) + kappa * cos(x - mu)
     return(val)
+  },
+  cdf = function(q, mu, kappa) {
+    return(NA)
   },
   rng = function(n, mu, kappa) {
     # rvm and dvm use different parameter names
@@ -646,6 +702,9 @@ dist_wrpcauchy <- Dist$new(
       val <- log(val)
     }
     return(val)
+  },
+  cdf = function(q, mu, rho) {
+    return(NA)
   },
   rng = function(n, mu, rho) {
     samp <- rwrpcauchy(n, mu, rho)
@@ -699,6 +758,9 @@ dist_mvnorm <- Dist$new(
     if (!log) p <- exp(p)
     return(p)
   }, 
+  cdf = function(q, ...) {
+    return(NA)
+  },
   rng = function(n, ...) {
     par <- c(...)
     # Dimension
@@ -752,6 +814,9 @@ dist_dir <- Dist$new(
     if (log) p <- log(p)
     return(p)
   }, 
+  cdf = function(q, ...) {
+    return(NA)
+  },
   rng = function(n, ...) {
     alpha <- c(...)
     y <- rgamma(n * length(alpha), shape = alpha, scale = 1)
