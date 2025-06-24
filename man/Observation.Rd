@@ -22,21 +22,18 @@ par0 <- list(Price = list(mean = c(3, 6), sd = c(2, 2)))
 # Model "energy" with normal distributions
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "norm"),
-                       par = par0,
-                       n_states = 2)
+                       par = par0)
                        
 # Model "energy" with gamma distributions
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "gamma2"),
-                       par = par0,
-                       n_states = 2)
+                       par = par0)
                        
 # Model with non-linear effect of EurDol on mean price
 f <- list(Price = list(mean = ~ s(EurDol, k = 5, bs = "cs")))
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "norm"),
-                       par = par0,
-                       n_states = 2, 
+                       par = par0, 
                        formula = f)
 
 ## ------------------------------------------------
@@ -98,6 +95,7 @@ obs$par()
 \item \href{#method-Observation-dists}{\code{Observation$dists()}}
 \item \href{#method-Observation-nstates}{\code{Observation$nstates()}}
 \item \href{#method-Observation-par}{\code{Observation$par()}}
+\item \href{#method-Observation-par_alt}{\code{Observation$par_alt()}}
 \item \href{#method-Observation-inipar}{\code{Observation$inipar()}}
 \item \href{#method-Observation-coeff_fe}{\code{Observation$coeff_fe()}}
 \item \href{#method-Observation-coeff_re}{\code{Observation$coeff_re()}}
@@ -110,6 +108,8 @@ obs$par()
 \item \href{#method-Observation-obs_var}{\code{Observation$obs_var()}}
 \item \href{#method-Observation-known_states}{\code{Observation$known_states()}}
 \item \href{#method-Observation-fixpar}{\code{Observation$fixpar()}}
+\item \href{#method-Observation-empty}{\code{Observation$empty()}}
+\item \href{#method-Observation-gam_args}{\code{Observation$gam_args()}}
 \item \href{#method-Observation-update_par}{\code{Observation$update_par()}}
 \item \href{#method-Observation-update_coeff_fe}{\code{Observation$update_coeff_fe()}}
 \item \href{#method-Observation-update_coeff_re}{\code{Observation$update_coeff_re()}}
@@ -138,7 +138,15 @@ obs$par()
 \subsection{Method \code{new()}}{
 Create new Observation object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Observation$new(data, dists, formulas = NULL, n_states, par, fixpar = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Observation$new(
+  data = NULL,
+  dists,
+  formulas = NULL,
+  n_states = NULL,
+  par,
+  fixpar = NULL,
+  gam_args = NULL
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -151,8 +159,8 @@ and par) and covariates (named in formulas)}
 with the following options: beta, binom, cat, dir, exp, foldednorm, 
 gamma, gamma2, lnorm, mvnorm, nbinom, norm, pois, t, truncnorm, tweedie, 
 vm, weibull, wrpcauchy, zibinom, zigamma, zigamma2, zinbinom, zipois, 
-ztnbinom, ztpois. See vignette about list of distributions for more 
-detail, e.g., list of parameters for each distribution.}
+zoibeta, ztnbinom, ztpois. See vignette about list of distributions for 
+more details, e.g., list of parameters for each distribution.}
 
 \item{\code{formulas}}{List of formulas for observation parameters. This should
 be a nested list, where the outer list has one element for each
@@ -161,7 +169,8 @@ parameter. Any parameter that is not included is assumed to have the
 formula ~1. By default, all parameters have the formula ~1 (i.e., no
 covariate effects).}
 
-\item{\code{n_states}}{Number of states (needed to construct model formulas)}
+\item{\code{n_states}}{Number of states (optional). If not provided, the number
+of states is derived from the length of entries of \code{par}.}
 
 \item{\code{par}}{List of initial observation parameters. This should
 be a nested list, where the outer list has one element for each
@@ -175,6 +184,9 @@ observation parameters), and "lambda_obs" (fixed smoothness parameters),
 Each element is a named vector of coefficients that should either be 
 fixed (if the corresponding element is set to NA) or estimated to a 
 common value (using integers or factor levels).}
+
+\item{\code{gam_args}}{Named list of arguments passed to \code{mgcv::gam()} in
+\code{Observation$make_mat()}, e.g., "knots". Use at your own risk.}
 }
 \if{html}{\out{</div>}}
 }
@@ -192,21 +204,18 @@ par0 <- list(Price = list(mean = c(3, 6), sd = c(2, 2)))
 # Model "energy" with normal distributions
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "norm"),
-                       par = par0,
-                       n_states = 2)
+                       par = par0)
                        
 # Model "energy" with gamma distributions
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "gamma2"),
-                       par = par0,
-                       n_states = 2)
+                       par = par0)
                        
 # Model with non-linear effect of EurDol on mean price
 f <- list(Price = list(mean = ~ s(EurDol, k = 5, bs = "cs")))
 obs <- Observation$new(data = energy, 
                        dists = list(Price = "norm"),
-                       par = par0,
-                       n_states = 2, 
+                       par = par0, 
                        formula = f)
 }
 \if{html}{\out{</div>}}
@@ -305,6 +314,34 @@ obs$par(t = c(1, 10, 20))
 
 }
 
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Observation-par_alt"></a>}}
+\if{latex}{\out{\hypertarget{method-Observation-par_alt}{}}}
+\subsection{Method \code{par_alt()}}{
+Alternative parameter output
+
+This function is only useful for the categorical and multivariate
+normal distributions, and it formats the parameters in a slightly nicer
+way.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Observation$par_alt(var = NULL, t = 1)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{var}}{Name of observation variable for which parameters are 
+required. By default, the first variable in 'dists' is used.}
+
+\item{\code{t}}{Time index for covariate values. Only one value should be
+provided.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+List of distribution parameters, with one element for each state
+}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Observation-inipar"></a>}}
@@ -465,6 +502,26 @@ for some other reason (e.g., size of binomial distribution)}
 }
 \if{html}{\out{</div>}}
 }
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Observation-empty"></a>}}
+\if{latex}{\out{\hypertarget{method-Observation-empty}{}}}
+\subsection{Method \code{empty()}}{
+Empty model? (for simulation only)
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Observation$empty()}\if{html}{\out{</div>}}
+}
+
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Observation-gam_args"></a>}}
+\if{latex}{\out{\hypertarget{method-Observation-gam_args}{}}}
+\subsection{Method \code{gam_args()}}{
+Extra arguments for mgcv::gam (passed to make_matrices)
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Observation$gam_args()}\if{html}{\out{</div>}}
+}
+
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Observation-update_par"></a>}}
@@ -818,7 +875,7 @@ overlaid with the pdf of the specified distribution for that data stream.
 Helpful to select initial parameter values for model fitting, or to visualise 
 fitted state-dependent distributions.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Observation$plot_dist(var, weights = NULL, t = 1)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Observation$plot_dist(var = NULL, weights = NULL, t = 1)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{

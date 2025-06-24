@@ -8,18 +8,21 @@
 #' to the argument '\code{data}', for cases where smooth terms or factor
 #' covariates are included, and the original data set is needed to determine
 #' the full range of covariate values.
+#' @param gam_args Named list of additional arguments for \code{mgcv::gam()},
+#' such as knots.
 #' 
 #' @return A list of
 #' \itemize{
 #'   \item X_fe Design matrix for fixed effects
 #'   \item X_re Design matrix for random effects
 #'   \item S Smoothness matrix
+#'   \item log_det_S Vector of log-determinants of smoothness matrices
 #'   \item ncol_fe Number of columns of X_fe for each parameter
 #'   \item ncol_re Number of columns of X_re and S for each random effect
 #' }
 #' 
 #' @importFrom stats update predict
-make_matrices = function(formulas, data, new_data = NULL) {
+make_matrices = function(formulas, data, new_data = NULL, gam_args = NULL) {
   # Initialise lists of matrices
   X_list_fe <- list()
   X_list_re <- list()
@@ -49,21 +52,23 @@ make_matrices = function(formulas, data, new_data = NULL) {
       }
     }
     
+    # Prepare gam() arguments
+    gam_args_list <- c(list(formula = update(form, dummy_response ~ .), 
+                            data = cbind(dummy_response = 1, data)),
+                       gam_args)
+    
     # Create matrices based on this formula
     if(is.null(new_data)) {
-      gam_setup <- gam(formula = update(form, dummy ~ .), 
-                       data = cbind(dummy = 1, data), 
-                       fit = FALSE)
+      gam_setup <- do.call(what = gam,
+                           args = c(gam_args_list, list(fit = FALSE)))
       Xmat <- gam_setup$X
       # Extract column names for design matrices
       term_names <- gam_setup$term.names
     } else {
       # Get design matrix for new data set
-      gam_setup0 <- gam(formula = update(form, dummy ~ .), 
-                       data = cbind(dummy = 1, data))
-      gam_setup <- gam(formula = update(form, dummy ~ .), 
-                        data = cbind(dummy = 1, data),
-                       fit = FALSE)
+      gam_setup0 <- do.call(what = gam, args = gam_args_list)
+      gam_setup <- do.call(what = gam,
+                           args = c(gam_args_list, list(fit = FALSE)))
       Xmat <- predict(gam_setup0, newdata = new_data, type = "lpmatrix")
       # Extract column names for design matrices
       term_names <- gam_setup$term.names
@@ -118,7 +123,16 @@ make_matrices = function(formulas, data, new_data = NULL) {
   colnames(X_re) <- names_re
   S <- bdiag_check(S_list)
   
-  return(list(X_fe = X_fe, X_re = X_re, S = S, 
-              X_list_fe = X_list_fe, X_list_re = X_list_re, S_list = S_list, 
-              ncol_fe = ncol_fe, ncol_re = ncol_re))
+  # Get (log-)determinants of penalty matrices
+  log_det_S <- unlist(sapply(S_list, gdeterminant))
+  
+  return(list(X_fe = X_fe, 
+              X_re = X_re, 
+              S = S,
+              log_det_S = log_det_S,
+              X_list_fe = X_list_fe, 
+              X_list_re = X_list_re, 
+              S_list = S_list, 
+              ncol_fe = ncol_fe, 
+              ncol_re = ncol_re))
 }

@@ -164,12 +164,49 @@ dist_nbinom <- Dist$new(
   invlink = list(size = exp, prob = plogis), 
   npar = 2, 
   parnames = c("size", "prob"), 
-  parapprox = function(x, size = 1) {
-    # use minimum variance unbiased estimate of p
-    k <- sum(x)
-    n <- length(x)
-    prob <- (n * size - 1) / (n * size + k - 1)
+  parapprox = function(x) {
+    mean <- mean(x)
+    var <- var(x)
+    if(var <= mean) {
+      # needs overdispersion
+      var <- 1.01 * mean
+    }
+    size <- mean^2 / (var - mean)
+    prob <- mean / var
     return(c(size, prob))
+  }
+)
+
+dist_nbinom2 <- Dist$new(
+  name = "nbinom2", 
+  name_long = "negative binomial",
+  pdf = function(x, mean, shape, log = FALSE) {
+    size <- shape
+    prob <- shape / (mean + shape)
+    dnbinom(x = x, size = size, prob = prob, log = log)
+  }, 
+  cdf = function(q, mean, shape) {
+    size <- shape
+    prob <- shape / (mean + shape)
+    pnbinom(q = q, size = size, prob = prob)
+  },
+  rng = function(n, mean, shape) {
+    size <- shape
+    prob <- shape / (mean + shape)
+    rnbinom(n = n, size = size, prob = prob)
+  }, 
+  link = list(mean = log, shape = log), 
+  invlink = list(mean = exp, shape = exp), 
+  npar = 2, 
+  parnames = c("mean", "shape"), 
+  parapprox = function(x) {
+    mean <- mean(x)
+    var <- var(x)
+    # needs overdispersion
+    shape <- ifelse(mean < var, 
+                    yes = mean^2/(var-mean), 
+                    no = 10000)
+    return(c(mean, shape))
   }
 )
 
@@ -213,8 +250,8 @@ dist_cat <- Dist$new(
   }, 
   # npar and parnames are updated based on data values in 
   # Observation$setup_cat()
-  npar = 1,
-  parnames = c("..."), 
+  npar = 3,
+  parnames = c("p2", "p3", "..."), 
   parapprox = function(x) {
     stop("parapprox() not implemented yet for categorical distribution")
     # # This would require parapprox knowing how many categories there are
@@ -222,6 +259,11 @@ dist_cat <- Dist$new(
     # tab <- prop.table(table(x))
     # p[as.numeric(names(tab))] <- as.numeric(tab)
     # return(p[-1])
+  },
+  par_alt = function(par) {
+    p <- c(1 - sum(par), par)
+    names(p) <- paste0("p", 1:length(p))
+    return(p)
   }
 )
 
@@ -480,37 +522,37 @@ dist_gamma2 <- Dist$new(
 
 # Zero-inflated gamma (shape, scale) ===================================
 dist_zigamma <- Dist$new(
-    name = "zigamma", 
-    name_long = "zero-inflated gamma",
-    pdf = function(x, shape, scale, z, log = FALSE) {
-        l <- ifelse(x == 0, 
-                    yes = z,
-                    no = (1 - z) * dgamma(x, shape = shape, scale = scale))
-        if (log) l <- log(l)
-        return(l)
-    }, 
-    cdf = function(q, shape, scale, z) {
-      return(NA)
-    },
-    rng = function(n, shape, scale, z) {
-        zero <- rbinom(n, 1, z)
-        y <- rgamma(n, shape = shape, scale = scale)
-        y[zero == 1] <- 0
-        return(y)},
-    link = list(shape = log, scale = log, z = qlogis), 
-    invlink = list(shape = exp, scale = exp, z = plogis), 
-    npar = 3, 
-    parnames = c("shape", "scale", "z"), 
-    parapprox = function(x) {
-        z <- length(which(x < 1e-10))/length(x)
-        y <- x[which(x > 1e-10)]
-        # method of moments estimators
-        mean <- mean(y)
-        sd <- sd(y)
-        scale <- sd^2 / mean 
-        shape <- mean / scale 
-        return(c(shape, scale, z))
-    }
+  name = "zigamma", 
+  name_long = "zero-inflated gamma",
+  pdf = function(x, shape, scale, z, log = FALSE) {
+    l <- ifelse(x == 0, 
+                yes = z,
+                no = (1 - z) * dgamma(x, shape = shape, scale = scale))
+    if (log) l <- log(l)
+    return(l)
+  }, 
+  cdf = function(q, shape, scale, z) {
+    return(NA)
+  },
+  rng = function(n, shape, scale, z) {
+    zero <- rbinom(n, 1, z)
+    y <- rgamma(n, shape = shape, scale = scale)
+    y[zero == 1] <- 0
+    return(y)},
+  link = list(shape = log, scale = log, z = qlogis), 
+  invlink = list(shape = exp, scale = exp, z = plogis), 
+  npar = 3, 
+  parnames = c("shape", "scale", "z"), 
+  parapprox = function(x) {
+    z <- length(which(x < 1e-10))/length(x)
+    y <- x[which(x > 1e-10)]
+    # method of moments estimators
+    mean <- mean(y)
+    sd <- sd(y)
+    scale <- sd^2 / mean 
+    shape <- mean / scale 
+    return(c(shape, scale, z))
+  }
 )
 
 # Zero-inflated gamma (mean, sd) ===================================
@@ -617,6 +659,51 @@ dist_beta <- Dist$new(
   }
 )
 
+# Zero-one-inflated beta ========================
+dist_zoibeta <- Dist$new(
+  name = "zoibeta",
+  pdf = function(x, shape1, shape2, zeromass, onemass, log = FALSE) {
+    l <- rep(NA, length(x))
+    l[which(x == 0)] <- zeromass
+    l[which(x == 1)] <- onemass
+    l[which(x > 0 & x < 1)] <- (1 - zeromass - onemass) * 
+      dbeta(x = x, shape1 = shape1, shape2 = shape2)
+    if(log) l <- log(l)
+    return(l)
+  },
+  cdf = function(q, shape1, shape2, zeromass, onemass) {
+    return(NA)
+  },
+  rng = function(n, shape1, shape2, zeromass, onemass) {
+    y <- sample(0:2, size = n, replace = TRUE, 
+                prob = c(zeromass, onemass, 1 - zeromass - onemass))
+    # Indices of non-0 and non-1 observations
+    ind <- which(y == 2)
+    y[ind] <- rbeta(n = length(ind), shape1 = shape1, shape2 = shape2)
+    return(y)
+  },
+  link = list(shape1 = log, shape2 = log, zeromass = qlogis, onemass = qlogis),
+  invlink = list(shape1 = exp, shape2 = exp, zeromass = plogis, onemass = plogis),
+  npar = 4,
+  parnames = c("shape1", "shape2", "zeromass", "onemass"), 
+  parapprox = function(x) {
+    zeromass <- length(which(x == 0))/length(x)
+    onemass <- length(which(x == 1))/length(x)
+    x <- x[which(x > 0 & x < 1)]
+    # method of moments 
+    mu <- mean(x)
+    s2 <- var(x)
+    tmp <- mu * (1 - mu) / s2 - 1
+    if (tmp < 1e-10) {
+      shape1 <- 1e-3
+      shape2 <- 1e-3
+    } else {
+      shape1 <- mu * tmp
+      shape2 <- (1 - mu) * tmp      
+    }
+    return(c(shape1, shape2, zeromass, onemass))
+  }
+)
 
 # Mixed distributions -----------------------------------------------------
 
@@ -651,25 +738,17 @@ dist_tweedie <- Dist$new(
 # Angular distributions ---------------------------------------------------
 
 # Von Mises ====================================
-#' @importFrom CircStats rvm
 dist_vm <- Dist$new(
   name = "vm",
   name_long = "von Mises",
   pdf = function(x, mu = 0, kappa = 1, log = FALSE) {
-    b <- besselI(kappa, 0)
-    if(!log)
-      val <- 1/(2 * pi * b) * exp(kappa * cos(x - mu))
-    else
-      val <- - log(2 * pi * b) + kappa * cos(x - mu)
-    return(val)
+    dvm(x = x, mu = mu, kappa = kappa, log = log)
   },
   cdf = function(q, mu, kappa) {
     return(NA)
   },
   rng = function(n, mu, kappa) {
-    # rvm and dvm use different parameter names
-    # (also, translate rvm output from [0, 2pi] to [-pi, pi])
-    rvm(n = n, mean = mu + pi, k = kappa) - pi
+    rvm(n = n, mu = mu, kappa = kappa)
   },
   link = list(mu = function(x) qlogis((x + pi) / (2 * pi)),
               kappa = log),
@@ -692,24 +771,17 @@ dist_vm <- Dist$new(
 )
 
 # Wrapped Cauchy ====================================
-#' @importFrom CircStats dwrpcauchy rwrpcauchy
 dist_wrpcauchy <- Dist$new(
   name = "wrpcauchy",
   name_long = "wrapped Cauchy",
   pdf = function(x, mu, rho, log = FALSE) {
-    val <- dwrpcauchy(theta = x, mu = mu, rho = rho)
-    if(log) {
-      val <- log(val)
-    }
-    return(val)
+    dwrpcauchy(x = x, mu = mu, rho = rho, log = log)
   },
   cdf = function(q, mu, rho) {
     return(NA)
   },
   rng = function(n, mu, rho) {
-    samp <- rwrpcauchy(n, mu, rho)
-    samp <- ifelse(samp > pi, samp - 2 * pi, samp)
-    return(samp)
+    rwrpcauchy(n = n, mu = mu, rho = rho)
   },
   link = list(mu = function(x) qlogis((x + pi) / (2 * pi)),
               rho = qlogis),
@@ -747,13 +819,7 @@ dist_mvnorm <- Dist$new(
     sds <- par[(m + 1) : (2 * m)]
     corr <- par[(2 * m + 1) : (2 * m + (m^2 - m) / 2)]
     # Create covariance matrix
-    V <- diag(m)
-    V[lower.tri(V)] <- corr 
-    V[upper.tri(V)] <- t(V)[upper.tri(V)]
-    for (i in 1:ncol(V)) {
-      V[i,] <- V[i,] * sds[i]
-      V[,i] <- V[,i] * sds[i]
-    }
+    V <- make_cov(sds, corr)
     p <- dmvn(y, mu, V)
     if (!log) p <- exp(p)
     return(p)
@@ -769,14 +835,7 @@ dist_mvnorm <- Dist$new(
     mu <- par[1:m]
     sds <- par[(m + 1) : (2 * m)]
     corr <- par[(2 * m + 1) : (2 * m + (m^2 - m) / 2)]
-    # Create covariance matrix
-    V <- diag(m)
-    V[lower.tri(V)] <- corr 
-    V[upper.tri(V)] <- t(V)[upper.tri(V)]
-    for (i in 1:ncol(V)) {
-      V[i,] <- V[i,] * sds[i]
-      V[,i] <- V[,i] * sds[i]
-    }
+    V <- make_cov(sds, corr)
     sims <- rmvn(n, mu, V)
     sims <- split(sims, 1:n)
     return(sims)
@@ -792,14 +851,27 @@ dist_mvnorm <- Dist$new(
     ymat <- t(apply(xmat, 1, mvnorm_invlink))
     return(as.vector(ymat))
   }, 
-  npar = 5, 
-  parnames = c("mu1", "mu2", "sd1", "sd2", "corr12"), 
+  npar = 8, 
+  parnames = c("mu1", "mu2", "...", "sd1", "sd2", "...", "corr12", "..."), 
   parapprox = function(x) {
     y <- do.call(cbind, as.matrix(x))
     mu <- rowMeans(y)
     sds <- apply(y, 1, sd)
     corr <- cor(t(y))
     return(c(mu, sds, corr[upper.tri(corr)]))
+  },
+  par_alt = function(par) {
+    # Dimension
+    m <- quad_pos_solve(1, 3, - 2 * length(par))
+    # Unpack parameters
+    mu <- par[1:m]
+    sds <- par[(m + 1) : (2 * m)]
+    corr <- par[(2 * m + 1) : (2 * m + (m^2 - m) / 2)]
+    # Create covariance matrix
+    V <- make_cov(sds, corr)
+    names(mu) <- paste0("mu", 1:m)
+    rownames(V) <- colnames(V) <- 1:m
+    return(list(mu = mu, Sigma = V))
   }
 )
 
@@ -851,7 +923,8 @@ dist_list <- list(beta = dist_beta,
                   gamma2 = dist_gamma2,
                   lnorm = dist_lnorm,
                   mvnorm = dist_mvnorm, 
-                  nbinom = dist_nbinom, 
+                  nbinom = dist_nbinom,
+                  nbinom2 = dist_nbinom2,
                   norm = dist_norm,
                   pois = dist_pois,
                   t = dist_t, 
@@ -864,7 +937,8 @@ dist_list <- list(beta = dist_beta,
                   zigamma = dist_zigamma,
                   zigamma2 = dist_zigamma2,
                   zinbinom = dist_zinbinom,
-                  zipois = dist_zipois, 
+                  zipois = dist_zipois,
+                  zoibeta = dist_zoibeta,
                   ztnbinom = dist_ztnbinom, 
                   ztpois = dist_ztpois)
 

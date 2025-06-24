@@ -425,10 +425,10 @@ Set priors for coefficients
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{new_priors}}{is a list of matrices for optionally 
-coeff_fe_obs, coeff_fe_hid, log_lambda_obs log_lambda_hid 
-each matrix has two rows (first row = mean, second row = sd) 
-specifying parameters for Normal priors}
+\item{\code{new_priors}}{is a named list of matrices with optional elements 
+coeff_fe_obs, coeff_fe_hid, log_lambda_obs, andlog_lambda_hid.
+Each matrix has two columns (first col = mean, second col = sd) 
+specifying parameters for normal priors.}
 }
 \if{html}{\out{</div>}}
 }
@@ -579,10 +579,10 @@ posterior estimate, although this can be changed using
 Model fitting
 
 The negative log-likelihood of the model is minimised using the
-function \code{optimx()}. TMB uses the Laplace approximation to integrate 
+function \code{nlminb()}. TMB uses the Laplace approximation to integrate 
 the random effects out of the likelihood.
 
-After the model has been fitted, the output of \code{optimx()} can be
+After the model has been fitted, the output of \code{nlminb()} can be
 accessed using the method \code{out()}. The estimated parameters can
 be accessed using the methods \code{par()} (for the HMM parameters, 
 possibly dependent on covariates), \code{predict()} (for uncertainty
@@ -599,8 +599,10 @@ effect coefficients on the linear predictor scale).
 \describe{
 \item{\code{silent}}{Logical. If FALSE, all tracing outputs are shown (default).}
 
-\item{\code{...}}{Other arguments to optimx which is used to optimise likelihood, 
-see ?optimx}
+\item{\code{...}}{Other arguments to nlminb which is used to optimise the
+likelihood. This currently only supports the additional argument
+\code{control}, which is a list of control parameters such as 
+\code{eval.max} and \code{iter.max} (see \code{?nlminb})}
 }
 \if{html}{\out{</div>}}
 }
@@ -841,7 +843,8 @@ to also get confidence intervals.
   newdata = NULL,
   n_post = 0,
   level = 0.95,
-  return_post = FALSE
+  return_post = FALSE,
+  as_list = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -866,14 +869,24 @@ will produce 95\% confidence intervals (default)}
 \item{\code{return_post}}{Logical. If TRUE, a list of posterior samples
 is returned.}
 
+\item{\code{as_list}}{Logical. If confidence intervals are required for the
+transition probabilities or observation parameters, this
+argument determines whether the MLE, lower confidence limit and upper
+confidence limit are returned as separate elements in a list (if
+TRUE; default), or whether they are combined into a single array (if
+FALSE). Ignored if \code{what = "delta"} or if \code{n_post = 0}.}
+
 \item{\code{...}}{Other arguments to the respective functions 
 for hid$tpm, hid$delta, obs$par}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Named array of predictions and confidence intervals, 
-if requested
+Maximum likelihood estimates (\code{mle}) of predictions,
+and confidence limits (\code{lcl} and \code{ucl}) if requested. The
+format of the output depends on whether confidence intervals are
+required (specified through \code{n_post}), and on the argument
+\code{as_list}.
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
@@ -925,11 +938,11 @@ confidence intervals.}
 }
 \subsection{Returns}{
 List of matrices with three columns: mle (maximum likelihood 
-estimate), lcl (lower confidence limit), and ucl (upper confidence
-limit). One such matrix is produced for the working parameters of the
-observation model, the working parameters of the hidden state model,
-the smoothness parameters of the observation model, and the smoothness
-parameters of the hidden state model.
+estimate), lcl (lower confidence limit), ucl (upper confidence
+limit), and se (standard error). One such matrix is produced for 
+the working parameters of the observation model, the working parameters
+of the hidden state model, the smoothness parameters of the observation 
+model, and the smoothness parameters of the hidden state model.
 }
 }
 \if{html}{\out{<hr>}}
@@ -1012,7 +1025,7 @@ as estimated by the Viterbi algorithm. If one variable name is passed
 as input, it is plotted against time. If two variables are passed, they
 are plotted against each other.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{HMM$plot_ts(var, var2 = NULL)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{HMM$plot_ts(var, var2 = NULL, line = TRUE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1021,6 +1034,10 @@ are plotted against each other.
 \item{\code{var}}{Name of the variable to plot.}
 
 \item{\code{var2}}{Optional name of a second variable, for 2-d plot.}
+
+\item{\code{line}}{Logical. If TRUE (default), lines are drawn between
+successive data points. Can be set to FALSE if another geom is
+needed (e.g., geom_point).}
 }
 \if{html}{\out{</div>}}
 }
@@ -1038,18 +1055,19 @@ This is a wrapper around Observation$plot_dist, where the
 distribution for each state is weighted by the proportion of time
 spent in that state (according to the Viterbi state sequence).
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{HMM$plot_dist(var)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{HMM$plot_dist(var = NULL)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{var}}{Name of data variable}
+\item{\code{var}}{Name of data variable. If NULL, a list of plots are
+returned (one for each observation variable)}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-Plot of distribution with data histogram
+Plot of distributions with data histogram
 }
 }
 \if{html}{\out{<hr>}}

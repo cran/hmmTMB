@@ -30,6 +30,34 @@ bdiag_check <- function(...) {
     return(bdiag(args[check]))
 }
 
+#' Generalized matrix determinant
+#' 
+#' Generalized determinant = product of non-zero eigenvalues 
+#' (see e.g., Wood 2017). Used for (log)determinant of penalty matrices,
+#' required in log-likelihood function. 
+#' 
+#' @param x Numeric matrix
+#' @param eps Threshold below which eigenvalues are ignored (default: 1e-10)
+#' @param log Logical: should the log-determinant be returned?
+#' 
+#' @return Generalized determinant of input matrix
+gdeterminant <- function(x, eps = 1e-10, log = TRUE) {
+  if(is.null(x)) {
+    return(NULL)
+  } else {
+    # Compute sum of log of non-zero eigenvalues
+    # (i.e., log generalized determinant)
+    eigenpairs <- eigen(x)
+    eigenvalues <- eigenpairs$values
+    logdet <- sum(log(eigenvalues[eigenvalues > eps]))
+    if(!log) {
+      return(exp(logdet))
+    } else{
+      return(logdet)
+    }        
+  }
+}
+
 #' Fill in NAs
 #' 
 #' Replace NA entries in a vector by the last non-NA value. If the first
@@ -209,6 +237,25 @@ invmlogit <- function(x) {
   return(y)
 }
 
+#' Make covariance matrix from standard deviations and correlations
+#' 
+#' @param sds Vector of standard deviations
+#' @param corr Vector of correlations (must be of length m*(m-1)/2 if
+#' sds is of length m)
+#' 
+#' @return An m by m covariance matrix
+make_cov <- function(sds, corr) {
+  m <- length(sds)
+  V <- diag(m)
+  V[lower.tri(V)] <- corr 
+  V[upper.tri(V)] <- t(V)[upper.tri(V)]
+  for (i in 1:ncol(V)) {
+    V[i,] <- V[i,] * sds[i]
+    V[,i] <- V[,i] * sds[i]
+  }
+  return(V)
+}
+
 #' Multivariate Normal link function 
 #'
 #' @param x Vector of parameters on natural scale (in the order: means,
@@ -218,12 +265,27 @@ invmlogit <- function(x) {
 #' 
 #' @importFrom stats qlogis
 mvnorm_link <- function(x) {
-  # get dimension 
+  # Get dimension 
   m <- quad_pos_solve(1, 3, - 2 * length(x))
+  
+  # Mean parameters (untransformed)
   mu <- x[1:m]
-  sds <- log(x[(m + 1) : (2 * m)])
-  corr <- qlogis((x[(2 * m + 1) : (2 * m + (m^2 - m) / 2)] + 1) / 2)
-  return(c(mu, sds, corr))
+  
+  # Standard deviations and correlations
+  sds <- x[(m + 1) : (2 * m)]
+  corr <- x[(2 * m + 1) : (2 * m + (m^2 - m) / 2)]
+  
+  # Cholesky decomposition of covariance matrix
+  cov_mat <- make_cov(sds, corr)
+  cov_chol <- t(chol(cov_mat))
+  
+  # Diagonal elements of Cholesky factor are positive, so log
+  # transform them to get unconstrained parameters
+  # See: https://mc-stan.org/docs/reference-manual/transforms.html#cholesky-factors-of-covariance-matrices
+  cov_par_diag <- log(diag(cov_chol))
+  cov_par_offdiag <- cov_chol[lower.tri(cov_chol)]
+  
+  return(c(mu, cov_par_diag, cov_par_offdiag))
 }
 
 #' Multivariate Normal inverse link function 
@@ -235,11 +297,29 @@ mvnorm_link <- function(x) {
 #'
 #' @importFrom stats plogis
 mvnorm_invlink = function(x) {
-  # get dimension 
+  # Get dimension 
   m <- quad_pos_solve(1, 3, - 2 * length(x))
+  
+  # Mean parameters (untransformed)
   mu <- x[1:m]
-  sds <- exp(x[(m + 1) : (2 * m)])
-  corr <- 2 * plogis(x[(2 * m + 1) : (2 * m + (m^2 - m) / 2)]) - 1
+  
+  # Unpack parameters of Cholesky factor of covariance matrix
+  # Diagonal elements of factor must be positive so we 
+  # exponentiate them here
+  # See: https://mc-stan.org/docs/reference-manual/transforms.html#cholesky-factors-of-covariance-matrices
+  cov_par_diag <- exp(x[(m+1):(2*m)])
+  cov_par_offdiag <- x[(2*m+1):(2*m+(m^2-m)/2)]
+  cov_chol <- diag(cov_par_diag)
+  cov_chol[lower.tri(cov_chol)] <- cov_par_offdiag
+  
+  # Get covariance matrix from Cholesky factor
+  cov_mat <- cov_chol %*% t(cov_chol)
+  
+  # Get standard deviations and correlations from covariance matrix
+  sds <- sqrt(diag(cov_mat))
+  corr_mat <- cov_mat / rep(sds, each = m) / rep(sds, m)
+  corr <- corr_mat[lower.tri(corr_mat)]
+  
   return(c(mu, sds, corr))
 }
 
@@ -348,4 +428,109 @@ as_sparse <- function(x) {
   # mat <- as(as(as(x, "dMatrix"), "generalMatrix"), "TsparseMatrix")
   mat <- suppressMessages(as(x, "dgTMatrix"))
   return(mat)
+}
+
+#' Check values in vector are contiguous
+#' 
+#' @param x Vector of values (can be numeric, character, factor)
+#' 
+#' @return Logical: are values contiguous?
+check_contiguous <- function(x) {
+  vals <- unique(x)
+  is_contiguous <- sapply(vals, function(val) {
+    ind <- which(x == val)
+    (ind[length(ind)] - ind[1]) == (length(ind) - 1)
+  })
+  return(all(is_contiguous))
+}
+
+#' Density function of von Mises distribution
+#' 
+#' @param x Angle
+#' @param mu Mean parameter
+#' @param kappa Concentration parameter
+#' @param log Should log-density be returned?
+#' 
+#' @return Von Mises density
+dvm <- function(x, mu, kappa, log = FALSE) {
+  # The "- kappa" term below cancels out the expon.scaled
+  b <- besselI(kappa, 0, expon.scaled = TRUE)
+  val <- - log(2 * pi * b) + kappa * cos(x - mu) - kappa
+  if(!log) {
+    val <- exp(val)        
+  }
+  return(val)
+}
+
+#' Sample from von Mises distribution
+#' 
+#' @param n Number of samples
+#' @param mu Mean parameter
+#' @param kappa Concentration parameter
+#' 
+#' @return Vector of n samples from vm(mu, kappa)
+#' 
+#' @details Uses basic rejection sampling, based on dvm(), which might
+#' be inefficient for large kappa. Could be improved following Best & Fisher 
+#' (1979), Efficient simulation of the von Mises distribution, JRSSC, 28(2), 
+#' 152-157.
+#' 
+#' @importFrom stats runif
+rvm <- function(n, mu, kappa) {
+  x <- rep(NA, n)
+  n_accept <- 0
+  pdf_max <- dvm(x = mu, mu = mu, kappa = kappa)
+  while(n_accept < n) {
+    x_star <- runif(1, min = -pi, max = pi)
+    pdf_star <- dvm(x = x_star, mu = mu, kappa = kappa)
+    accept_prob <- pdf_star/pdf_max
+    if(runif(1) < accept_prob) {
+      n_accept <- n_accept + 1
+      x[n_accept] <- x_star
+    }
+  }
+  return(x)
+}
+
+#' Density function of wrapped Cauchy distribution
+#' 
+#' @param x Angle
+#' @param mu Mean parameter
+#' @param rho Concentration parameter
+#' @param log Should log-density be returned?
+#' 
+#' @return Wrapped Cauchy density
+dwrpcauchy <- function(x, mu, rho, log = FALSE) {
+  val <- (1 - rho^2) / 
+    (2 * pi * (1 + rho^2 - 2 * rho * cos(x - mu)))
+  if(log) {
+    val <- log(val)
+  }
+  return(val)
+}
+
+#' Sample from wrapped Cauchy distribution
+#' 
+#' @param n Number of samples
+#' @param mu Mean parameter
+#' @param rho Concentration parameter
+#' 
+#' @return Vector of n samples from wrpcauchy(mu, rho)
+#' 
+#' @details Uses basic rejection sampling, based on dwrpcauchy(), which might
+#' be inefficient for large rho.
+rwrpcauchy <- function(n, mu, rho) {
+  x <- rep(NA, n)
+  n_accept <- 0
+  pdf_max <- dwrpcauchy(x = mu, mu = mu, rho = rho)
+  while(n_accept < n) {
+    x_star <- runif(1, min = -pi, max = pi)
+    pdf_star <- dwrpcauchy(x = x_star, mu = mu, rho = rho)
+    accept_prob <- pdf_star/pdf_max
+    if(runif(1) < accept_prob) {
+      n_accept <- n_accept + 1
+      x[n_accept] <- x_star
+    }
+  }
+  return(x)
 }

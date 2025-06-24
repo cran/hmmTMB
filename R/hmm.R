@@ -10,9 +10,10 @@
 #' @importFrom ggplot2 ggplot aes theme_light geom_line theme scale_colour_manual
 #' facet_wrap label_bquote xlab ylab ggtitle element_blank element_text geom_point
 #' geom_ribbon scale_size_manual geom_histogram geom_vline geom_errorbar after_stat
+#' coord_cartesian
 #' @importFrom TMB MakeADFun sdreport
 #' @importFrom stringr str_trim str_split str_split_fixed
-#' @importFrom optimx optimx
+#' @importFrom stats nlminb
 #' @importFrom tmbstan tmbstan
 #' 
 #' @useDynLib hmmTMB, .registration = TRUE
@@ -193,9 +194,10 @@ HMM <- R6Class(
     #' been run
     states = function() {
       if(is.null(private$states_)) {
-        stop("Run viterbi first")
+        return(self$viterbi())
+      } else {
+        return(private$states_)        
       }
-      return(private$states_)
     },
     
     #' @description Coefficients for fixed effect parameters
@@ -295,11 +297,13 @@ HMM <- R6Class(
       }
       
       # Update initial distribution delta0
-      n_ID <- length(unique(self$obs()$data()$ID))
+      ID <- self$obs()$data()$ID
+      n_ID <- length(unique(ID))
       n_states <- self$hid()$nstates()
       if (self$hid()$stationary()) {
-        delta <- self$hid()$delta(t = 1)
-        delta0 <- matrix(delta, ncol = n_states, nrow = n_ID, byrow = TRUE)
+        # Find stationary distribution for each ID
+        first_indices <- c(1, which(ID[-1] != ID[-length(ID)]) + 1)
+        delta0 <- self$hid()$delta(t = first_indices)
       } else {
         # Fill delta0 except reference elements
         delta0 <- t(sapply(1:n_ID, function(i) {
@@ -349,10 +353,10 @@ HMM <- R6Class(
     
     #' @description Set priors for coefficients 
     #' 
-    #' @param new_priors is a list of matrices for optionally 
-    #' coeff_fe_obs, coeff_fe_hid, log_lambda_obs log_lambda_hid 
-    #' each matrix has two rows (first row = mean, second row = sd) 
-    #' specifying parameters for Normal priors 
+    #' @param new_priors is a named list of matrices with optional elements 
+    #' coeff_fe_obs, coeff_fe_hid, log_lambda_obs, andlog_lambda_hid.
+    #' Each matrix has two columns (first col = mean, second col = sd) 
+    #' specifying parameters for normal priors. 
     set_priors = function(new_priors = NULL) {
       fe <- self$coeff_fe()
       if (!is.null(new_priors$coeff_fe_obs)) {
@@ -509,6 +513,10 @@ HMM <- R6Class(
     #' 
     #' @param silent Logical. If TRUE, all tracing outputs are hidden (default).
     setup = function(silent = TRUE) {
+      if(self$hid()$empty() | self$obs()$empty()) {
+        stop("Empty models (no data) should only be used for simulation.")
+      }
+      
       # Vector of codes of observation distributions
       distcode <- as.vector(sapply(self$obs()$dists(), function(d) d$code()))
       # Vector of number of parameters for observation distributions
@@ -531,6 +539,7 @@ HMM <- R6Class(
       X_fe_obs <- mod_mat_obs$X_fe
       X_re_obs <- mod_mat_obs$X_re
       S_obs <- mod_mat_obs$S
+      log_det_S_obs <- mod_mat_obs$log_det_S
       ncol_re_obs <- mod_mat_obs$ncol_re
       
       # Create model matrices of hidden state process
@@ -539,6 +548,7 @@ HMM <- R6Class(
       X_fe_hid <- mod_mat_hid$X_fe
       X_re_hid <- mod_mat_hid$X_re
       S_hid <- mod_mat_hid$S
+      log_det_S_hid <- mod_mat_hid$log_det_S
       ncol_re_hid <- mod_mat_hid$ncol_re
       
       # Prepare initial distribution delta0
@@ -564,6 +574,7 @@ HMM <- R6Class(
         map <- c(map, list(coeff_re_obs = factor(NA),
                            log_lambda_obs = factor(NA)))
         S_obs <- as_sparse(matrix(0, 1, 1))
+        log_det_S_obs <- -1
         ncol_re_obs <- matrix(-1, nr = 1, nc = 1)
         X_re_obs <- as_sparse(rep(0, nrow(X_fe_obs)))
       } else {
@@ -581,6 +592,7 @@ HMM <- R6Class(
         map <- c(map, list(coeff_re_hid = factor(NA),
                            log_lambda_hid = factor(NA)))
         S_hid <- as_sparse(matrix(0, 1, 1))
+        log_det_S_hid <- -1
         ncol_re_hid <- matrix(-1, nr = 1, nc = 1)
         X_re_hid <- as_sparse(rep(0, nrow(X_fe_hid)))
       } else {
@@ -618,7 +630,8 @@ HMM <- R6Class(
             nms <- names(v)
           }
           # Set map to user input
-          tmp[nms %in% names(fixed)] <- fixed
+          names_fixed <- nms %in% names(fixed)
+          tmp[names_fixed] <- fixed[nms[names_fixed]]
           tmp <- factor(as.vector(tmp), levels = unique(as.vector(tmp)))
           ls <- list(tmp)
           names(ls) <- par_names[i]
@@ -661,10 +674,12 @@ HMM <- R6Class(
                       X_fe_obs = as_sparse(X_fe_obs),
                       X_re_obs = as_sparse(X_re_obs),
                       S_obs = as_sparse(S_obs),
+                      log_det_S_obs = log_det_S_obs,
                       ncol_re_obs = ncol_re_obs,
                       X_fe_hid = as_sparse(X_fe_hid),
                       X_re_hid = as_sparse(X_re_hid),
                       S_hid = as_sparse(S_hid),
+                      log_det_S_hid = log_det_S_hid,
                       ncol_re_hid = ncol_re_hid,
                       include_smooths = 1, 
                       ref_tpm = self$hid()$ref(),
@@ -768,10 +783,10 @@ HMM <- R6Class(
     #' @description Model fitting
     #' 
     #' The negative log-likelihood of the model is minimised using the
-    #' function \code{optimx()}. TMB uses the Laplace approximation to integrate 
+    #' function \code{nlminb()}. TMB uses the Laplace approximation to integrate 
     #' the random effects out of the likelihood.
     #' 
-    #' After the model has been fitted, the output of \code{optimx()} can be
+    #' After the model has been fitted, the output of \code{nlminb()} can be
     #' accessed using the method \code{out()}. The estimated parameters can
     #' be accessed using the methods \code{par()} (for the HMM parameters, 
     #' possibly dependent on covariates), \code{predict()} (for uncertainty
@@ -781,8 +796,10 @@ HMM <- R6Class(
     #' effect coefficients on the linear predictor scale).
     #' 
     #' @param silent Logical. If FALSE, all tracing outputs are shown (default).
-    #' @param ... Other arguments to optimx which is used to optimise likelihood, 
-    #' see ?optimx
+    #' @param ... Other arguments to nlminb which is used to optimise the
+    #' likelihood. This currently only supports the additional argument
+    #' \code{control}, which is a list of control parameters such as 
+    #' \code{eval.max} and \code{iter.max} (see \code{?nlminb})
     #'
     #' @examples
     #' # Load data set (included with R)
@@ -809,51 +826,47 @@ HMM <- R6Class(
         self$setup(silent = silent)
       }
       
-      # Number of states
-      n_states <- self$hid()$nstates()
-      
-      # Fit model
+      # Check extra arguments
       args <- list(...)
       if (any(c("par", "fn", "gr", "he", "hessian") %in% names(args))) {
         stop(paste("Cannot supply arguments to HMM$fit() with name par,",
                    "fn, gr, he, or hessian. These are reserved by TMB."))
       }
       if (any(c("lower", "upper") %in% names(args))) {
-        warning("'lower' and 'upper' arguments to optimx are ignored in hmmTMB")
+        warning("'lower' and 'upper' arguments to nlminb are ignored in hmmTMB")
       }
-      # change default method to nlminb
-      private$tmb_obj_$method <- "nlminb"
-      if ("method" %in% names(args)) {
-        private$tmb_obj_$method <- args$method 
-        args <- args[which(names(args) != "method")]
+      
+      # Defaults eval.max and iter.max to 1e4
+      if("control" %in% names(args)) {
+        if(!("eval.max" %in% names(args$control))) {
+          args$control$eval.max <- 1e4
+        }
+        if(!("iter.max" %in% names(args$control))) {
+          args$control$iter.max <- 1e4
+        }
+      } else {
+        args$control <- list(eval.max = 1e4, iter.max = 1e4)
       }
-      if (!("control" %in% names(args))) {
-        args$control <- list(kkt = FALSE, 
-                             starttests = FALSE,
-                             dowarn = FALSE)
-      }
-      # create temporary optimization function
-      opt_fn <- function(par) {as.vector(args$fn(par))}
-      opt_gr <- function(par) {as.vector(args$gr(par))}
-      # fit model 
+      
+      # Fit model
       args <- c(private$tmb_obj_, args)
-      private$out_ <- optimx(par = args$par, 
-                             fn = opt_fn, 
-                             gr = opt_gr, 
-                             method = args$method,
-                             itnmax = args$itnmax, 
-                             hessian = args$hessian, 
-                             control = args$control)
-      best <- which.min(private$out_$value)
-      if (private$out_$convcode[best] != 0) {
+      systime <- system.time(
+        private$out_ <- nlminb(start = args$par, 
+                               objective = args$fn,
+                               gradient = args$gr, 
+                               control = args$control)
+      )
+      private$out_$systime <- systime
+      
+      if (private$out_$convergence != 0) {
         warning(paste("Convergence code was not zero, indicating that the",
                       "optimizer may not have converged to the correct",
                       "estimates. Please check by consulting the out() function",
-                      "which shows what optimx returned."))
+                      "which shows what nlminb returned."))
       }
       
       # Get estimates and precision matrix for all parameters
-      best_par <- as.vector(private$out_[best, 1:length(private$tmb_obj_$par)])
+      best_par <- private$out_$par
       rownames(best_par) <- NULL
       names(best_par) <- names(private$tmb_obj_$par)
       private$tmb_obj_$par <- best_par
@@ -862,7 +875,7 @@ HMM <- R6Class(
                                    skip.delta.method = FALSE)
       par_list <- as.list(private$tmb_rep_, "Estimate")
       
-      # update parameters 
+      # Update parameters 
       self$update_par(par_list)
       
     },
@@ -971,7 +984,7 @@ HMM <- R6Class(
         
         if(all(is.na(cdfs[[var]]))) {
           message(paste0("Pseudo-residuals not implemented for '", 
-                         hmm$obs()$dists()[[2]]$name(), "' distribution. ",
+                         self$obs()$dists()[[2]]$name(), "' distribution. ",
                          "Returning NA."))
         } else {
           cat("Computing residuals for", names(cdfs)[var], "... ")
@@ -1004,6 +1017,10 @@ HMM <- R6Class(
     #' 
     #' @return Most likely state sequence
     viterbi = function() {
+      if(!is.null(private$states_)) {
+        return(private$states_)
+      }
+      
       data <- self$obs()$data()
       ID <- data$ID
       
@@ -1026,7 +1043,7 @@ HMM <- R6Class(
       i0 <- c(1, which(ID[-1] != ID[-n]) + 1, n + 1)
       
       # Initialise state sequence
-      all_states <- NULL
+      all_states <- rep(NA, length = n)
       
       # Initial distribution
       delta0 <- self$hid()$delta0() 
@@ -1034,7 +1051,7 @@ HMM <- R6Class(
       # Loop over IDs
       for(id in 1:n_id) {
         # Subset to this ID
-        ind_this_id <- which(ID == unique(ID)[id])
+        ind_this_id <- i0[id]:(i0[id + 1] - 1)
         sub_obs_probs <- obs_probs[ind_this_id,]
         sub_tpm_all <- tpm_all[,,ind_this_id]
         
@@ -1058,7 +1075,7 @@ HMM <- R6Class(
         }
         
         # Append estimated states for this ID
-        all_states <- c(all_states, states)
+        all_states[ind_this_id] <- states
       }
       
       # Save state sequence
@@ -1284,9 +1301,12 @@ HMM <- R6Class(
       
       # Compute confidence interval
       if (level > 0) {
-        alp <- (1 - level) / 2
+        alpha <- 1 - level
         arr <- simplify2array(res$post)
-        ci <- apply(arr, 1:(length(dim(arr)) - 1), quantile, prob = c(0.025, 0.975))
+        ci <- apply(X = arr, 
+                    MARGIN = 1:(length(dim(arr)) - 1), 
+                    FUN = quantile, 
+                    prob = c(alpha/2, 1 - alpha/2))
         nci <- length(dim(ci))
         ci <- aperm(ci, c(2:nci, 1))
         block <- prod(dim(ci)[-nci])
@@ -1295,6 +1315,8 @@ HMM <- R6Class(
         dim(lcl) <- dim(ucl) <- dim(ci)[-nci]
         res$lcl <- lcl
         res$ucl <- ucl
+        dimnames(res$lcl) <- dimnames(res$mean)
+        dimnames(res$ucl) <- dimnames(res$mean)
       }
       
       if(!return_post) {
@@ -1323,10 +1345,19 @@ HMM <- R6Class(
     #' @param level Level of the confidence intervals, e.g. CI = 0.95
     #' will produce 95\% confidence intervals (default) 
     #' @param return_post Logical. If TRUE, a list of posterior samples
-    #' is returned. 
+    #' is returned.
+    #' @param as_list Logical. If confidence intervals are required for the
+    #' transition probabilities or observation parameters, this
+    #' argument determines whether the MLE, lower confidence limit and upper
+    #' confidence limit are returned as separate elements in a list (if
+    #' TRUE; default), or whether they are combined into a single array (if
+    #' FALSE). Ignored if \code{what = "delta"} or if \code{n_post = 0}.
     #' 
-    #' @return Named array of predictions and confidence intervals, 
-    #' if requested
+    #' @return Maximum likelihood estimates (\code{mle}) of predictions,
+    #' and confidence limits (\code{lcl} and \code{ucl}) if requested. The
+    #' format of the output depends on whether confidence intervals are
+    #' required (specified through \code{n_post}), and on the argument
+    #' \code{as_list}.
     #' 
     #' @examples
     #' # Load data set (included with R)
@@ -1349,7 +1380,7 @@ HMM <- R6Class(
     #' # Get transition probability matrix with confidence intervals
     #' hmm$predict(what = "tpm", n_post = 1000)
     predict = function(what, t = 1, newdata = NULL, n_post = 0, level = 0.95, 
-                       return_post = FALSE) {
+                       return_post = FALSE, as_list = TRUE) {
       if (is.null(private$out_) & n_post > 0) {
         stop("Fit model first")
       }
@@ -1391,6 +1422,23 @@ HMM <- R6Class(
                             t = t,
                             level = level,
                             return_post = return_post)
+        
+        # Replace posterior mean from post_fn() by MLE        
+        val$mean <- fn(linpred = self[[comp]]()$linpred(), t = t)
+        names(val)[which(names(val) == "mean")] <- "mle"
+        
+        # Format as array for nicer output
+        if(!as_list & what %in% c("tpm", "obspar")) {
+          mle <- val$mle
+          names <- paste0(rep(rownames(mle), each = ncol(mle)), 
+                          " - ", rep(colnames(mle), nrow(mle)))
+          a <- array(NA, dim = c(length(names), 3, dim(mle)[3]), 
+                     dimnames = list(names, c("mle", "lcl", "ucl"), NULL))
+          a[,1,] <- as.vector(aperm(mle, c(2, 1, 3)))
+          a[,2,] <- as.vector(aperm(val$lcl, c(2, 1, 3)))
+          a[,3,] <- as.vector(aperm(val$ucl , c(2, 1, 3)))
+          val <- a
+        }
       }
       
       # Reset to original model matrices
@@ -1414,11 +1462,11 @@ HMM <- R6Class(
     #' confidence intervals.
     #' 
     #' @return List of matrices with three columns: mle (maximum likelihood 
-    #' estimate), lcl (lower confidence limit), and ucl (upper confidence
-    #' limit). One such matrix is produced for the working parameters of the
-    #' observation model, the working parameters of the hidden state model,
-    #' the smoothness parameters of the observation model, and the smoothness
-    #' parameters of the hidden state model.
+    #' estimate), lcl (lower confidence limit), ucl (upper confidence
+    #' limit), and se (standard error). One such matrix is produced for 
+    #' the working parameters of the observation model, the working parameters
+    #' of the hidden state model, the smoothness parameters of the observation 
+    #' model, and the smoothness parameters of the hidden state model.
     confint = function(level = 0.95) {
       # Get standard errors from covariance matrix
       rep <- self$tmb_rep()
@@ -1430,30 +1478,40 @@ HMM <- R6Class(
       }
       se <- sqrt(diag(V)[1:length(par)])
       
+      # Add standard errors for fixed parameters (SE = 0)
+      se_all <- rep(0, nrow(self$coeff_array()))
+      se_all[which(!is.na(self$coeff_array()[,"fixed"]))] <-
+        se[na.omit(self$coeff_array()[,"fixed"])]
+      names(se_all) <- row.names(self$coeff_array())
+      
       # Unpack model components
-      obspar_se <- se[which(names(par) == "coeff_fe_obs")]
-      hidpar_se <- se[which(names(par) == "coeff_fe_hid")]
-      obslam_se <- se[which(names(par) == "log_lambda_obs")]
-      hidlam_se <- se[which(names(par) == "log_lambda_hid")]
+      obspar_se <- se_all[which(names(se_all) == "coeff_fe_obs")]
+      hidpar_se <- se_all[which(names(se_all) == "coeff_fe_hid")]
+      obslam_se <- se_all[which(names(se_all) == "log_lambda_obs")]
+      hidlam_se <- se_all[which(names(se_all) == "log_lambda_hid")]
       
       # Get Wald-type confidence intervals
       quant <- qnorm(1 - (1 - level)/2)
       obspar_ci <- cbind(self$coeff_fe()$obs,
                          self$coeff_fe()$obs - quant * obspar_se,
-                         self$coeff_fe()$obs + quant * obspar_se)
+                         self$coeff_fe()$obs + quant * obspar_se,
+                         obspar_se)
       hidpar_ci <- cbind(self$coeff_fe()$hid,
                          self$coeff_fe()$hid - quant * hidpar_se,
-                         self$coeff_fe()$hid + quant * hidpar_se)
+                         self$coeff_fe()$hid + quant * hidpar_se,
+                         hidpar_se)
       obslam_ci <- cbind(self$lambda()$obs,
                          self$lambda()$obs - quant * obslam_se,
-                         self$lambda()$obs + quant * obslam_se)
+                         self$lambda()$obs + quant * obslam_se,
+                         obslam_se)
       hidlam_ci <- cbind(self$lambda()$hid,
                          self$lambda()$hid - quant * hidlam_se,
-                         self$lambda()$hid + quant * hidlam_se)
-      colnames(obspar_ci) <- c("mle", "lcl", "ucl")
-      colnames(hidpar_ci) <- c("mle", "lcl", "ucl")
-      colnames(obslam_ci) <- c("mle", "lcl", "ucl")
-      colnames(hidlam_ci) <- c("mle", "lcl", "ucl")
+                         self$lambda()$hid + quant * hidlam_se,
+                         hidlam_se)
+      colnames(obspar_ci) <- c("mle", "lcl", "ucl", "se")
+      colnames(hidpar_ci) <- c("mle", "lcl", "ucl", "se")
+      colnames(obslam_ci) <- c("mle", "lcl", "ucl", "se")
+      colnames(hidlam_ci) <- c("mle", "lcl", "ucl", "se")
       
       out <- list(coeff_fe = list(obs = obspar_ci, hid = hidpar_ci),
                   lambda = list(obs = obslam_ci, hid = hidlam_ci)) 
@@ -1473,7 +1531,7 @@ HMM <- R6Class(
     simulate = function(n, data = NULL, silent = FALSE) {
       if(is.null(data)) {
         data <- data.frame(ID = rep(factor(1), n))
-      } else if(is.null(data$ID)) {
+      } else if(!("ID" %in% names(data))) {
         data$ID <- rep(factor(1), n)
       }
       
@@ -1621,9 +1679,12 @@ HMM <- R6Class(
     #' 
     #' @param var Name of the variable to plot.
     #' @param var2 Optional name of a second variable, for 2-d plot.
+    #' @param line Logical. If TRUE (default), lines are drawn between
+    #' successive data points. Can be set to FALSE if another geom is
+    #' needed (e.g., geom_point).
     #' 
     #' @return A ggplot object
-    plot_ts = function(var, var2 = NULL) {
+    plot_ts = function(var, var2 = NULL, line = TRUE) {
       if(is.null(private$states_)) {
         self$viterbi()
       }
@@ -1642,7 +1703,10 @@ HMM <- R6Class(
                          x = data[[var]])
         
         p <- ggplot(data = df, mapping = aes(index, x, col = state, group = ID)) +
-          geom_line() + xlab("time") + ylab(var)
+          xlab("time") + ylab(var)
+        if(line) {
+          p <- p + geom_line()          
+        }
       } else {
         # 2d plot
         df <- data.frame(ID = ID,
@@ -1650,7 +1714,10 @@ HMM <- R6Class(
                          y = data[[var2]])
         
         p <- ggplot(data = df, mapping = aes(x, y, col = state, group = ID)) +
-          geom_path() + xlab(var) + ylab(var2)
+          xlab(var) + ylab(var2)
+        if(line) {
+          p <- p + geom_path()          
+        }
       }
       
       p <- p + 
@@ -1666,10 +1733,11 @@ HMM <- R6Class(
     #' distribution for each state is weighted by the proportion of time
     #' spent in that state (according to the Viterbi state sequence).
     #'
-    #' @param var Name of data variable
+    #' @param var Name of data variable. If NULL, a list of plots are
+    #' returned (one for each observation variable)
     #' 
-    #' @return Plot of distribution with data histogram 
-    plot_dist = function(var) {
+    #' @return Plot of distributions with data histogram 
+    plot_dist = function(var = NULL) {
       if(is.null(private$states_)) {
         self$viterbi()
       }
@@ -1719,7 +1787,7 @@ HMM <- R6Class(
                             level = 0.95, n_post = n_post)
       
       # Data frame for plot
-      df <- as.data.frame.table(preds$mean)
+      df <- as.data.frame.table(preds$mle)
       df$lcl <- as.vector(preds$lcl)
       df$ucl <- as.vector(preds$ucl)
       if (what == "tpm") {
@@ -1827,7 +1895,7 @@ HMM <- R6Class(
     #' 
     #' @return Marginal AIC
     AIC_marginal = function() {
-      llk <- -self$out()$value
+      llk <- -self$out()$objective
       npar <- nrow(self$obs()$coeff_fe()) + 
         nrow(self$hid()$coeff_fe()) +
         length(self$obs()$lambda()) +

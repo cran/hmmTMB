@@ -20,15 +20,16 @@ Observation <- R6Class(
     #' with the following options: beta, binom, cat, dir, exp, foldednorm, 
     #' gamma, gamma2, lnorm, mvnorm, nbinom, norm, pois, t, truncnorm, tweedie, 
     #' vm, weibull, wrpcauchy, zibinom, zigamma, zigamma2, zinbinom, zipois, 
-    #' ztnbinom, ztpois. See vignette about list of distributions for more 
-    #' detail, e.g., list of parameters for each distribution.
+    #' zoibeta, ztnbinom, ztpois. See vignette about list of distributions for 
+    #' more details, e.g., list of parameters for each distribution.
     #' @param formulas List of formulas for observation parameters. This should
     #' be a nested list, where the outer list has one element for each
     #' observed variable, and the inner lists have one element for each
     #' parameter. Any parameter that is not included is assumed to have the
     #' formula ~1. By default, all parameters have the formula ~1 (i.e., no
     #' covariate effects).
-    #' @param n_states Number of states (needed to construct model formulas)
+    #' @param n_states Number of states (optional). If not provided, the number
+    #' of states is derived from the length of entries of \code{par}.
     #' @param par List of initial observation parameters. This should
     #' be a nested list, where the outer list has one element for each
     #' observed variable, and the inner lists have one element for each
@@ -40,6 +41,8 @@ Observation <- R6Class(
     #' Each element is a named vector of coefficients that should either be 
     #' fixed (if the corresponding element is set to NA) or estimated to a 
     #' common value (using integers or factor levels).
+    #' @param gam_args Named list of arguments passed to \code{mgcv::gam()} in
+    #' \code{Observation$make_mat()}, e.g., "knots". Use at your own risk.
     #' 
     #' @return A new Observation object
     #' 
@@ -53,38 +56,59 @@ Observation <- R6Class(
     #' # Model "energy" with normal distributions
     #' obs <- Observation$new(data = energy, 
     #'                        dists = list(Price = "norm"),
-    #'                        par = par0,
-    #'                        n_states = 2)
+    #'                        par = par0)
     #'                        
     #' # Model "energy" with gamma distributions
     #' obs <- Observation$new(data = energy, 
     #'                        dists = list(Price = "gamma2"),
-    #'                        par = par0,
-    #'                        n_states = 2)
+    #'                        par = par0)
     #'                        
     #' # Model with non-linear effect of EurDol on mean price
     #' f <- list(Price = list(mean = ~ s(EurDol, k = 5, bs = "cs")))
     #' obs <- Observation$new(data = energy, 
     #'                        dists = list(Price = "norm"),
-    #'                        par = par0,
-    #'                        n_states = 2, 
+    #'                        par = par0, 
     #'                        formula = f)
-    initialize = function(data, 
+    initialize = function(data = NULL, 
                           dists, 
                           formulas = NULL, 
-                          n_states, 
+                          n_states = NULL, 
                           par,
-                          fixpar = NULL) {
+                          fixpar = NULL,
+                          gam_args = NULL) {
       private$check_args(data = data, 
                          dists = dists, 
                          n_states = n_states, 
                          par = par, 
                          formulas = formulas)
       
+      # Automatically detect the number of states from par
+      if(is.null(n_states)) {
+        n_states <- unique(rapply(par, length))
+      }
+      
+      # If no data is passed, create data frame with two rows (minimum
+      # required by mgcv::gam for initialisation)
+      if(is.null(data)) {
+        message(paste("No 'data' argument -- creating empty model", 
+                      "(should be used for simulation only)"))
+        data <- as.data.frame(lapply(seq_along(dists), function(d) c(NA, NA)))
+        names(data) <- names(dists)
+        private$empty_ <- TRUE
+      } else {
+        private$empty_ <- FALSE
+      }
+      
+      # Save user-specified arguments for mgcv::gam()
+      private$gam_args_ <- gam_args
+      
       # Make sure there is an ID column in the data and it's a factor
-      if(is.null(data$ID)) {
+      if(!("ID" %in% names(data))) {
         data$ID <- factor(1)
       } else {
+        if(!check_contiguous(data$ID)) {
+          stop("Observations for each ID must be contiguous in data.")
+        }
         data$ID <- factor(data$ID)
       }
       
@@ -117,8 +141,9 @@ Observation <- R6Class(
         private$dists_ <- dists        
       }
       
-      # If categorical distribution, setup parameters based on data
+      # If categorical or MVN distribution, setup parameters based on data
       private$setup_cat()
+      private$setup_mvn(formulas = formulas)
       
       # Check if user-provided parameters match distribution definition
       n_var <- length(dists)
@@ -304,6 +329,43 @@ Observation <- R6Class(
       return(par)
     },
     
+    #' @description Alternative parameter output
+    #' 
+    #' This function is only useful for the categorical and multivariate
+    #' normal distributions, and it formats the parameters in a slightly nicer
+    #' way.
+    #' 
+    #' @param var Name of observation variable for which parameters are 
+    #' required. By default, the first variable in 'dists' is used.
+    #' @param t Time index for covariate values. Only one value should be
+    #' provided.
+    #' 
+    #' @return List of distribution parameters, with one element for each state
+    par_alt = function(var = NULL, t = 1) {
+      # Use first variable by default
+      if(is.null(var)) {
+        var <- names(self$dists())[1]
+      }
+      which_var <- which(names(self$dists()) == var)
+      
+      # State-dependent parameters
+      par <- self$par(t = t, full_names = FALSE)
+      # Indices of parameters for each variable
+      par_ind_all <- c(1, cumsum(sapply(self$dists(), function(x) x$npar())) + 1)
+      par_ind <- par_ind_all[which_var]:(par_ind_all[which_var + 1] - 1)
+      
+      # Loop over states
+      n_states <- self$nstates()
+      res <- vector(mode = "list", length = n_states)
+      for(i in 1:n_states) {
+        par_this_state <- par[par_ind, i, 1]
+        res[[i]] <- self$dists()[[which_var]]$par_alt(par_this_state)
+      }
+      names(res) <- paste0("state ", 1:n_states)
+      
+      return(res)
+    },
+    
     #' @description Return initial parameter values supplied 
     inipar = function() {return(private$inipar_)}, 
     
@@ -407,6 +469,12 @@ Observation <- R6Class(
       }
     },
     
+    #' @description Empty model? (for simulation only)
+    empty = function() {return(private$empty_)},
+    
+    #' @description Extra arguments for mgcv::gam (passed to make_matrices)
+    gam_args = function() {return(private$gam_args_)},
+    
     # Mutators ----------------------------------------------------------------
     
     #' @description Update parameters
@@ -504,7 +572,8 @@ Observation <- R6Class(
     make_mat = function(new_data = NULL) {
       make_matrices(formulas = self$formulas(),
                     data = self$data(),
-                    new_data = new_data)
+                    new_data = new_data,
+                    gam_args = self$gam_args())
     },
     
     #' @description Design matrices for grid of covariates
@@ -708,7 +777,7 @@ Observation <- R6Class(
         cdf_list[[var]] <- cdf_mat
       }
       names(cdf_list) <- var_names
-
+      
       return(cdf_list)
     },
     
@@ -751,7 +820,8 @@ Observation <- R6Class(
       var_noNA <- na.omit(self$obs_var(expand = TRUE))
       wh_noNA <- 1:nrow(self$obs_var())
       if(any(is.na(self$obs_var(expand = TRUE)))) {
-        wh_noNA <- wh_noNA[-which(is.na(foo), arr.ind = TRUE)[,"row"]]
+        obs_var <- self$obs_var(expand = TRUE)
+        wh_noNA <- wh_noNA[-which(is.na(obs_var), arr.ind = TRUE)[,"row"]]
       }
       cluster <- kmeans(var_noNA, centers = n_states, nstart = 100)
       states <- cluster$cluster
@@ -767,7 +837,7 @@ Observation <- R6Class(
       # Loop over observed variables 
       par_count <- 1 
       for (i in 1:length(self$dists())) {
-        var <- self$obs_var()[wh_noNA, i]
+        var <- self$obs_var()[[i]][wh_noNA]
         
         # Possibly pass fixed parameters to parapprox function within dist
         par_ind <- par_count:(par_count + self$dists()[[i]]$npar() - 1)
@@ -811,7 +881,12 @@ Observation <- R6Class(
     #' @param t Index of time step to use for covariates (default: 1).
     #' 
     #' @return A ggplot object
-    plot_dist = function(var, weights = NULL, t = 1) {
+    plot_dist = function(var = NULL, weights = NULL, t = 1) {
+      if(is.null(var)) {
+        return(lapply(names(self$dists()), function(this_var)
+          self$plot_dist(var = this_var, weights = weights, t = t)))
+      }
+      
       # Extract observed values for relevant variable
       obs <- data.frame(val = self$data()[[var]])
       
@@ -939,38 +1014,19 @@ Observation <- R6Class(
     mats_ = NULL, 
     fixpar_user_ = NULL,
     fixpar_ = NULL,
+    empty_ = NULL,
+    gam_args_ = NULL,
     
     #' Check constructor arguments 
     # (For argument description, see constructor)
     check_args = function(data, dists, n_states, par, formulas) {
-      if(!inherits(data, "data.frame")) {
-        stop("'data' should be a data.frame")
-      }
-      
-      # Check that time intervals are regular if 'time' is provided
-      if(!is.null(data$time)) {
-        # Get indices of start and end of time series
-        if(!is.null(data$ID)) {
-          i0 <- which(data$ID[-1] != data$ID[-nrow(data)])
-          start <- c(1, i0 + 1)
-          end <- c(i0, nrow(data))
-        } else {
-          start <- 1
-          end <- nrow(data)
+      if(!is.null(data)) {
+        if(!inherits(data, "data.frame")) {
+          stop("'data' should be a data.frame")
         }
         
-        # Time intervals between data rows
-        dt <- data$time[-start] - data$time[-end]
-        
-        # Length of range of time intervals
-        dt_range <- as.numeric(diff(range(dt, na.rm = TRUE)))
-        # Median time interval
-        dt_median <- as.numeric(median(dt, na.rm = TRUE))
-        
-        # If (max - min) is longer than 0.5*median, send warning (arbitrary threshold)
-        if(dt_range/dt_median > 0.5) {
-          warning(paste("'data$time' seems to be irregular. Data rows should be at",
-                        "regular time intervals."))
+        if(!all(names(dists) %in% colnames(data))) {
+          stop("Variable name in 'dists' not found in data")
         }
       }
       
@@ -983,26 +1039,21 @@ Observation <- R6Class(
                    "(i.e., distribution names), or Dist objects"))
       }
       
-      if(!all(names(dists) %in% colnames(data))) {
-        stop("Variable name in 'dists' not found in data")
-      }
-      
-      if(!is.numeric(n_states) | n_states < 1) {
-        stop("'n_states' should be a numeric >= 1")
-      }
-      
-      if(!is.null(par)) {
-        if(!is.list(par) | length(par) != length(dists)) {
-          stop("'par' should be a list of same length as 'dists'")
-        }
-        
+      if(!is.null(n_states)) {
+        if(!is.numeric(n_states) | n_states < 1) {
+          stop("'n_states' should be a numeric >= 1")
+        }        
         if(!all(rapply(par, length) == n_states) | !all(rapply(par, is.numeric))) {
           stop("Elements of 'par' should be numeric vectors of length 'n_states'")
         }
-        
-        if(!all(names(par) == names(dists))) {
-          stop("'par' should have the same names as 'dists'")
-        }
+      }
+      
+      if(!is.list(par) | length(par) != length(dists)) {
+        stop("'par' should be a list of same length as 'dists'")
+      }
+      
+      if(!all(names(par) == names(dists))) {
+        stop("'par' should have the same names as 'dists'")
       }
       
       if(!is.null(formulas)) {
@@ -1030,7 +1081,7 @@ Observation <- R6Class(
           obs <- self$data()[[var_name]]
           which_notNA <- which(!is.na(obs))
           obs_notNA <- obs[which_notNA]
-                    
+          
           # If factor/character, convert to 1:N where N = # categories
           if(is.factor(obs) | is.character(obs)) {
             obs_notNA <- factor(obs_notNA)
@@ -1060,6 +1111,39 @@ Observation <- R6Class(
           # Update number and names of parameters
           npar <- length(unique(obs_notNA)) - 1
           parnames <- paste0("p", 2:(npar + 1))
+          self$dists()[[i]]$set_npar(npar)
+          self$dists()[[i]]$set_parnames(parnames)
+        }
+      }
+    },
+    
+    # Setup MVN distributions
+    setup_mvn = function(formulas = NULL) {
+      # Find MVN distributions
+      which_mvn <- which(sapply(self$dists(), function(d) d$name()) == "mvnorm")
+      
+      if(length(which_mvn > 0)) {
+        if(!is.null(formulas)) {
+          warning(paste("Formulas should only be used on *mean* parameters of",
+                        "mvnorm distribution. Standard deviations and",
+                        "correlations have complex transformations which",
+                        "preclude this."))
+        }
+        
+        # Loop through MVN variables
+        for(i in which_mvn) {
+          var_name <- names(self$dists())[i]
+          # Get number of dimensions
+          obs <- do.call(rbind, self$data()[[var_name]])
+          n_dim <- ncol(obs)
+          
+          # Update number and names of parameters
+          npar <- 2 * n_dim + n_dim * (n_dim - 1) / 2
+          V <- matrix(1:n_dim, nrow = n_dim, ncol = n_dim)
+          tV <- t(V)
+          parnames <- c(paste0("mu", 1:n_dim), 
+                        paste0("sd", 1:n_dim), 
+                        paste0("corr", tV[lower.tri(tV)], V[lower.tri(V)]))
           self$dists()[[i]]$set_npar(npar)
           self$dists()[[i]]$set_parnames(parnames)
         }
