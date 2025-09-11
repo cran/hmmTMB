@@ -1,9 +1,9 @@
-f05a58a2e7465f36467fd2cdeee4aa2c *DESCRIPTION
+19983fd84ac5cc78d10fe3e067e5a839 *DESCRIPTION
 bfb9ff26d8ab123d9320557bbc216962 *NAMESPACE
-cf1de6236daeda4e21039e79bfb3bb3b *NEWS.md
+59a1c02013dd6bd9e1e1491491062fdc *NEWS.md
 6a75f9ca6b36e65261718cb5f5657cab *R/dist.R
 e8f101afb29ef4329408688e6ff0b261 *R/dist_def.R
-0e9d79523df24d53efd9a35461e59862 *R/hmm.R
+e17356a989c48618df216d3ce67b8e3b *R/hmm.R
 aae0ea29cb63f0ae653b28a9b6e84fcc *R/hmmTMB-package.R
 5e416a86ec253421c4bf16c6dafca071 *R/logLik.R
 3e36b29e4e2189caa48ca23f65cd1006 *R/make_formulas.R
@@ -12,9 +12,9 @@ fd9ec13f319f61f163d84aab93b842e7 *R/markovchain.R
 7b8daf0fa44bf1e5e3e9404ba399fb72 *R/observation.R
 bf1e083785f2094f1c800cf206b65b12 *R/update.R
 1050b2a669e92d3b4eab6ca14aeeb8ed *R/utility.R
-1a482da8f053e2be1c317bfa3977a7e0 *README.md
+7b3a07217d7f38eba57cdb3bf4164af7 *README.md
 8f0c3374080814838513dae6ce51d0d1 *build/vignette.rds
-82b847b09eecd8bb71ac9eaf906ececc *inst/CITATION
+f2a1e506124aadb1fe6312fd3d2404f2 *inst/CITATION
 150d070b5b8698d1e23d612f0712ee46 *inst/case_studies/accelerometry_raptor.R
 0b3dcf346cdaa33c0a98c333e5f5c00f *inst/case_studies/cjs_dipper.R
 164da8e00fd2b35b869c8b82cab9e9e8 *inst/case_studies/cjs_js_possums.R
@@ -32,7 +32,7 @@ abd81a8890c912bb653133b40fa49316 *inst/case_studies/spanish_energy.R
 0f51988466e2c528032b3a3888216bdf *inst/devel/true_mod.hmm
 f0b2199cfdbcb5e3829bebe542523921 *inst/devel/wishlist.txt
 75fc877c9859438ed91c0b0d2aa07326 *inst/doc/hmmTMB_list_of_online_resources.Rmd
-2687c4a73fb8a4a4bc3ef02b1757738d *inst/doc/hmmTMB_list_of_online_resources.pdf
+69f4a0447ffe803c9d366f806546f30e *inst/doc/hmmTMB_list_of_online_resources.pdf
 ae31b6f8675ce6febf691aa88e79fbdc *inst/examples/dists/beta/driver.R
 b6a7446a36c2ae2f301ea1b8a6e99d2e *inst/examples/dists/beta/mod.hmm
 3e60e106448773c61adb5078189a1ce6 *inst/examples/dists/beta/true_mod.hmm
