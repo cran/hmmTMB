@@ -733,6 +733,7 @@ HMM <- R6Class(
         stop("You need to install the package tmbstan to do this")
       }
       
+      args <- list(...)
       if(!is.null(args$laplace)) {
         if(args$laplace) {
           stop("'laplace = TRUE' not currently working in fit_stan()")
@@ -990,7 +991,7 @@ HMM <- R6Class(
         
         if(all(is.na(cdfs[[var]]))) {
           message(paste0("Pseudo-residuals not implemented for '", 
-                         self$obs()$dists()[[2]]$name(), "' distribution. ",
+                         self$obs()$dists()[[var]]$name(), "' distribution. ",
                          "Returning NA."))
         } else {
           cat("Computing residuals for", names(cdfs)[var], "... ")

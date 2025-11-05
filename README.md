@@ -2,11 +2,11 @@
 
 This R package implements flexible hidden Markov models, based on Template Model Builder (TMB): flexible state-dependent distributions, transition probability structures, random effects, and smoothing splines. 
 
-## Preprint
+## Paper
 
-The statistical background, as well as details about the implementation of the package, and several example analyses, are presented in the following preprint.
+The statistical background, as well as details about the implementation of the package, and several example analyses, are presented in the following paper.
 
-[Michelot, T. (2022). hmmTMB: Hidden Markov models with flexible covariate effects in R. arXiv:2211.14139.](https://arxiv.org/abs/2211.14139)
+[Michelot, T. (2025). hmmTMB: hidden Markov models with flexible covariate effects in R. Journal of Statistical Software, 114(5), 1-45.](https://doi.org/10.18637/jss.v114.i05)
 
 ## Package installation
 

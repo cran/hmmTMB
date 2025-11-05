@@ -21,7 +21,7 @@ The vignettes are subject to change, and you should consult the Github repositor
 
 # Article
 
-A description of the statistical background, implementation details, and several detailed examples, are provided in the following arXiv preprint: ['hmmTMB: hidden Markov models with flexible covariate effects in R'](https://arxiv.org/abs/2211.14139) (@michelot2022).
+A description of the statistical background, implementation details, and several detailed examples, are provided in the following Journal of Statistical Software article: ['hmmTMB: hidden Markov models with flexible covariate effects in R'](https://doi.org/10.18637/jss.v114.i05) (@michelot2025).
 
 # Vignettes
 
