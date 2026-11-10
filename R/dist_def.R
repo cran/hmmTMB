@@ -214,7 +214,7 @@ dist_nbinom2 <- Dist$new(
 dist_cat <- Dist$new(
   name = "cat", 
   name_long = "categorical",
-  pdf = function(x, ..., log = TRUE) {
+  pdf = function(x, ..., log = FALSE) {
     # get class probabilities
     p <- c(...) 
     p <- c(1 - sum(p), p)
@@ -507,12 +507,14 @@ dist_t <- Dist$new(
     x <- y + mean 
     return(x)
   }, 
-  link = list(mean = identity, scale = log), 
-  invlink = list(mean = identity, scale = exp), 
+  link = list(mean = identity, scale = function(x) log(x - 1)), 
+  invlink = list(mean = identity, scale = function(x) exp(x) + 1), 
   npar = 2, 
   parnames = c("mean", "scale"), 
   parapprox = function(x) {
-    return(c(mean(x), sd(x)))
+    m <- mean(x)
+    s <- ifelse(sd(x) > 1, sd(x), 1.1)
+    return(c(m, s))
   }
 )
 
@@ -726,6 +728,7 @@ dist_beta <- Dist$new(
 # Zero-one-inflated beta ========================
 dist_zoibeta <- Dist$new(
   name = "zoibeta",
+  name_long = "zero-one-inflated beta",
   pdf = function(x, shape1, shape2, zeromass, onemass, log = FALSE) {
     l <- rep(NA, length(x))
     l[which(x == 0)] <- zeromass
@@ -766,6 +769,44 @@ dist_zoibeta <- Dist$new(
       shape2 <- (1 - mu) * tmp      
     }
     return(c(shape1, shape2, zeromass, onemass))
+  }
+)
+
+
+# Scaled chi-squared ========================================
+dist_schisq <- Dist$new(
+  name = "schisq", 
+  name_long = "scaled chi-squared",
+  pdf = function(x, scale, df, log = FALSE) { 
+    shape <- df/2
+    scale_gamma <- 2*scale^2
+    l <- dgamma(x, shape = shape, scale = scale_gamma, log = log)
+    return(l)
+  },
+  cdf = function(q, scale, df) {
+    shape <- df/2
+    scale_gamma <- 2*scale^2
+    p <- pgamma(q = q, shape = shape, scale = scale_gamma)
+    return(p)
+  },
+  rng = function(n, scale, df) {
+    shape <- df/2
+    scale_gamma <- 2*scale^2
+    return(rgamma(n, shape = shape, scale = scale_gamma))
+  },
+  link = list(scale = log, df = log),
+  invlink = list(scale = exp, df = exp),
+  npar = 2, 
+  parnames = c("scale", "df"), 
+  parapprox = function(x) {
+    # method of moments estimators
+    mean <- mean(x)
+    sd <- sd(x)
+    scale_gamma <- sd^2 / mean 
+    shape <- mean / scale_gamma 
+    scale = sqrt(scale_gamma/2)
+    df = 2*shape
+    return(c(scale, df))
   }
 )
 
@@ -1005,7 +1046,8 @@ dist_list <- list(beta = dist_beta,
                   zipois = dist_zipois,
                   zoibeta = dist_zoibeta,
                   ztnbinom = dist_ztnbinom, 
-                  ztpois = dist_ztpois)
+                  ztpois = dist_ztpois,
+                  schisq = dist_schisq)
 
 # Define unique distribution code (must match C++ side)
 lapply(seq_along(dist_list), function(i) {

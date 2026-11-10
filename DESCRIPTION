@@ -1,7 +1,7 @@
 Package: hmmTMB
 Type: Package
 Title: Fit Hidden Markov Models using Template Model Builder
-Version: 1.1.2
+Version: 2.0.0
 Authors@R: c(
   person(given = "Theo",
          family = "Michelot",
@@ -9,7 +9,23 @@ Authors@R: c(
          email = "theo.michelot@dal.ca"),
   person(given = "Richard",
          family = "Glennie",
-         role = c("aut", "ctb")))
+         role = "aut"),
+  person(given = "Jan-Ole",
+         family = "Fischer",
+         role = "ctb",
+         comment = "SPDE smooths"),
+  person(given = "Duncan",
+         family = "Cameron-Steinke",
+         role = "ctb",
+         comment = "Forecast class"),
+  person(given = "Pauline",
+         family = "Rocu",
+         role = "ctb",
+         comment = "schisq distribution"),
+  person(given = "Litty",
+         family = "Mathew",
+         role = "ctb",
+         comment = "hnbinom distribution"))
 Maintainer: Theo Michelot <theo.michelot@dal.ca>
 Description: Fitting hidden Markov models using automatic differentiation 
   and Laplace approximation, allowing for fast inference and flexible covariate
@@ -18,16 +34,19 @@ Description: Fitting hidden Markov models using automatic differentiation
 URL: https://github.com/TheoMichelot/hmmTMB
 License: GPL-3
 Depends: R6, mgcv, TMB, ggplot2
-Imports: Matrix, stringr, MASS, tmbstan, methods
+Imports: Matrix, stringr, MASS, tmbstan, methods, fmesher
 LinkingTo: TMB, RcppEigen
-Suggests: rstan, testthat, knitr, rmarkdown, moveHMM, scico, MSwM,
-        unmarked
+Suggests: rstan, testthat, knitr, rmarkdown, expm, MSwM
 Encoding: UTF-8
-RoxygenNote: 7.3.2
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0
 NeedsCompilation: yes
-Packaged: 2025-11-04 14:27:49 UTC; theo
+Packaged: 2026-11-10 13:15:57 UTC; theo
 Author: Theo Michelot [aut, cre],
-  Richard Glennie [aut, ctb]
+  Richard Glennie [aut],
+  Jan-Ole Fischer [ctb] (SPDE smooths),
+  Duncan Cameron-Steinke [ctb] (Forecast class),
+  Pauline Rocu [ctb] (schisq distribution),
+  Litty Mathew [ctb] (hnbinom distribution)
 Repository: CRAN
-Date/Publication: 2025-11-05 13:50:02 UTC
+Date/Publication: 2026-11-10 15:10:10 UTC

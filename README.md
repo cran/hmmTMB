@@ -43,6 +43,8 @@ We describe functionalities of the package in several vignettes, which are liste
  
 - ['General dependence structures in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_general_structures.pdf): Implementation details for hidden Markov models (HMMs) with non-standard dependence structures, including hidden semi-Markov models, higher-order HMMs, autoregressive HMMs, and coupled HMMs.
  
+- ['(Semi-)supervised learning in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_supervised_learning.pdf): Illustration of semi-supervised learning to pass information about state process to model.
+ 
 ### Case studies
   
 - ['Flexible animal movement modelling using hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_example_movement.pdf): Description of wild haggis movement analysis, illustrating how non-parametric covariate effects can be included. This includes two different types of movement models: (1) correlated random walks based on step lengths and turning angles, and (2) correlated random walks based on locations directly.
@@ -51,7 +53,13 @@ We describe functionalities of the package in several vignettes, which are liste
 
 - ['The categorical distribution in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_example_categorical.pdf): The categorical distribution is slightly different from others, in that the number of parameters depends on the data (specifically, on the number of categories in the data). This vignette shows an example analysis for a data set on patient-therapist interactions from the [mHMMbayes](https://cran.r-project.org/package=mHMMbayes) package.
  
- - ['The multivariate normal distribution in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_example_mvn.pdf): We illustrate the state-dependent multivariate normal distribution for modelling correlated variables, using time series of log-returns. The vignette describes the formulation in terms of standard deviations and correlation parameters, and compares this approach to using multiple univariate normal distributions.
+- ['The multivariate normal distribution in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_example_mvn.pdf): We illustrate the state-dependent multivariate normal distribution for modelling correlated variables, using time series of log-returns. The vignette describes the formulation in terms of standard deviations and correlation parameters, and compares this approach to using multiple univariate normal distributions.
+ 
+- ['Forecasting with hmmTMB: an example using Old Faithful data'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_forecasting_old_faithful.pdf) and ['Forecasting with hmmTMB: energy prices'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_forecasting_energy.pdf): We illustrate the use of the `Forecast` class to forecast the state process and observation distribution of a fitted hidden Markov model. The two vignettes use different data sets, and illustrate different ways to visualise the forecast outputs.
+
+- ['SPDE smooths in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_spde_spatial_smooths.pdf): This analysis showcases the `'spde'` smooth basis, which is based on the stochastic partial differential equation (SPDE) approach to smoothing. In the vignette, transition probabilities are estimated as spatially-varying with an SPDE smooth, to estimate areas where different transitions are more likely to occur.
+
+- ['(Semi-)supervised learning in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_supervised_learning.pdf): When the state process is partially known, this information can be passed to the model in a semi-supervised approach. 
  
 ### Reference vignettes
  

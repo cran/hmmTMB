@@ -15,7 +15,9 @@ Observation <- R6Class(
     #' @description Create new Observation object
     #' 
     #' @param data Data frame containing response variables (named in dists
-    #' and par) and covariates (named in formulas)
+    #' and par) and covariates (named in formulas). Note that "state" is a
+    #' reserved column name, used to pass known states to the model (semi-
+    #' supervised learning).
     #' @param dists Named list of distribution names for each data stream,
     #' with the following options: beta, binom, cat, dir, exp, foldednorm, 
     #' gamma, gamma2, lnorm, mvnorm, nbinom, norm, pois, t, truncnorm, tweedie, 
@@ -109,7 +111,7 @@ Observation <- R6Class(
         if(!check_contiguous(data$ID)) {
           stop("Observations for each ID must be contiguous in data.")
         }
-        data$ID <- factor(data$ID)
+        data$ID <- factor(data$ID, levels = unique(data$ID))
       }
       
       # Set data and nstates attributes
@@ -119,6 +121,8 @@ Observation <- R6Class(
       
       # Check for observed states 
       if ("state" %in% colnames(data)) {
+        message("Column 'state' used to fix known states.")
+        
         kn <- lapply(strsplit(as.character(data$state), ","), FUN = as.numeric)
         private$known_states_data_ <- data$state
         known_states <- matrix(1, nr = nrow(data), nc = n_states)
@@ -184,6 +188,7 @@ Observation <- R6Class(
       cov_names <- unique(rapply(self$formulas(), all.vars))
       # Remove pi from list of covariates if it is in the formulas
       cov_names <- cov_names[which(cov_names!="pi")]
+      cov_names <- cov_names_in_data(cov_names, data)
       if(length(cov_names) > 0) {
         # Remove NAs in covariates (replace by last non-NA value)
         data[,cov_names] <- lapply(data[,cov_names, drop=FALSE], 
@@ -197,12 +202,14 @@ Observation <- R6Class(
       ncol_re <- mats$ncol_re
       private$terms_ <- c(mats, list(names_fe = colnames(mats$X_fe),
                                      names_re_all = colnames(mats$X_re),
-                                     names_re = colnames(ncol_re)))
+                                     names_re = mats$sp_names))
       
       # Initialise parameters      
       self$update_coeff_fe(rep(0, sum(ncol_fe)))
       self$update_coeff_re(rep(0, ncol(mats$X_re)))
-      self$update_lambda(rep(1, ifelse(is.null(ncol_re), 0, ncol(ncol_re))))
+      # Each smooth's constructor supplies its own starting values; an
+      # ordinary smooth supplies none, which means lambda = 1 as before
+      self$update_lambda(exp(mats$theta_start))
       
       # Make sure par is in right order
       corrected_par <- vector(mode = "list", length = n_var)
@@ -390,7 +397,15 @@ Observation <- R6Class(
     #' each smooth term into a standard deviation, given by 
     #' SD = 1/sqrt(lambda). It is particularly helpful to get the
     #' standard deviations of independent normal random effects.
-    sd_re = function() {return(1/sqrt(private$lambda_))},
+    #' A smooth with its own parameterisation rather than a single smoothness
+    #' parameter -- a Gaussian field, whose parameters are already a marginal
+    #' standard deviation and a range -- has no such transformation and
+    #' returns NA; read those off \code{lambda()} directly.
+    sd_re = function() {
+      sd <- 1/sqrt(private$lambda_)
+      sd[self$terms()$sp_gmrf == 1] <- NA
+      return(sd)
+    },
     
     #' @description List of model formulas for observation model
     #' 
@@ -911,12 +926,10 @@ Observation <- R6Class(
       # Loop over states
       vals <- matrix(NA, nrow = n_grid, ncol = self$nstates() + 1)
       for(state in 1:self$nstates()) {
-        # Define list of arguments to pass to pdf
-        args <- list(grid)
-        args <- c(args, par[state,])
-        
-        # Compute state-dependent pdf
-        vals[,state] <- weights[state] * do.call(self$dists()[[var]]$pdf(), args)
+        # Compute state-dependent pdf (pointwise using sapply because some pdfs
+        # are not vectorised)
+        vals[,state] <- weights[state] *
+          sapply(grid, self$dists()[[var]]$pdf_apply, par = par[state,])
       }
       # Weighted sum of state-dependent pdfs
       vals[, self$nstates() + 1] <- rowSums(vals[, 1:self$nstates()])
@@ -936,7 +949,7 @@ Observation <- R6Class(
         geom_histogram(breaks = breaks, aes(y = after_stat(density)), 
                        col = "white", bg = "lightgrey", na.rm = TRUE) + 
         geom_line(aes(grid, val, col = state, linetype = state), 
-                  data = df_dens, size = 0.7) +
+                  data = df_dens, linewidth = 0.7) +
         scale_color_manual("", values = c(hmmTMB_cols[1:self$nstates()], "black")) +
         scale_linetype_manual("", values = c(rep(1, self$nstates()), 2)) +
         coord_cartesian(ylim = c(0, 1.1 * max(h$density))) +

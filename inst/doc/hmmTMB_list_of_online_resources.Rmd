@@ -47,6 +47,12 @@ A description of the statistical background, implementation details, and several
 
  - ['The multivariate normal distribution in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_example_mvn.pdf): We illustrate the state-dependent multivariate normal distribution for modelling correlated variables, using time series of log-returns. The vignette describes the formulation in terms of standard deviations and correlation parameters, and compares this approach to using multiple univariate normal distributions.
 
+- ['Forecasting with hmmTMB: an example using Old Faithful data'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_forecasting_old_faithful.pdf) and ['Forecasting with hmmTMB: energy prices'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_forecasting_energy.pdf): We illustrate the use of the `Forecast` class to forecast the state process and observation distribution of a fitted hidden Markov model. The two vignettes use different data sets, and illustrate different ways to visualise the forecast outputs.
+
+- ['SPDE smooths in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_spde_spatial_smooths.pdf): This analysis showcases the `'spde'` smooth basis, which is based on the stochastic partial differential equation (SPDE) approach to smoothing. In the vignette, transition probabilities are estimated as spatially-varying with an SPDE smooth, to estimate areas where different transitions are more likely to occur.
+
+- ['(Semi-)supervised learning in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_supervised_learning.pdf): When the state process is partially known, this information can be passed to the model in a semi-supervised approach.
+
 ## Reference vignettes
  
  - ['List of distributions in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_dist_list.pdf): List of observation distributions currently available in hmmTMB.
@@ -54,5 +60,7 @@ A description of the statistical background, implementation details, and several
  - ['Adding new distributions in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_adding_distributions.pdf): Technical vignette about adding new observation distributions to hmmTMB, with detailed instructions to add the required R and C++ code.
  
  - ['Syntax of model formulas in hmmTMB'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_formula_syntax.pdf): Flexible covariate dependence can be specified using the syntax of mgcv formulas, and this vignette describes a few special cases, including random effects (intercepts or slopes), smooth non-linear relationships, factor-smooth interactions, multidimensional smooths, varying-coefficient models, cyclical effects, etc.
+
+- ['HMM package comparison'](https://github.com/TheoMichelot/hmmTMB/blob/master/vignettes/hmmTMB_package_comparison.pdf): The syntax of hmmTMB is compared to depmixS4, momentuHMM, LMest, and hmmlearn on a simple example.
 
 # References

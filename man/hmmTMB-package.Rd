@@ -6,7 +6,7 @@
 \alias{hmmTMB-package}
 \title{hmmTMB: Fit Hidden Markov Models using Template Model Builder}
 \description{
-Fitting hidden Markov models using automatic differentiation and Laplace approximation, allowing for fast inference and flexible covariate effects (including random effects and smoothing splines) on model parameters. The package is described by Michelot (2022) \href{https://arxiv.org/abs/2211.14139}{arXiv:2211.14139}.
+Fitting hidden Markov models using automatic differentiation and Laplace approximation, allowing for fast inference and flexible covariate effects (including random effects and smoothing splines) on model parameters. The package is described by Michelot (2025) \doi{10.18637/jss.v114.i05}.
 }
 \details{
 The package hmmTMB is based on three main classes (i.e., types of objects):
@@ -26,7 +26,16 @@ Useful links:
 
 Authors:
 \itemize{
-  \item Richard Glennie [contributor]
+  \item Theo Michelot \email{theo.michelot@dal.ca}
+  \item Richard Glennie
+}
+
+Other contributors:
+\itemize{
+  \item Jan-Ole Fischer (SPDE smooths) [contributor]
+  \item Duncan Cameron-Steinke (Forecast class) [contributor]
+  \item Pauline Rocu (schisq distribution) [contributor]
+  \item Litty Mathew (hnbinom distribution) [contributor]
 }
 
 }
